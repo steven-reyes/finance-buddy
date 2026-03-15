@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank, TrendingUp,
-  Target, Upload, Settings, Menu, X
+  Target, CreditCard, Upload, Settings, Menu, X
 } from 'lucide-react';
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/budgets', icon: PiggyBank, label: 'Budgets' },
   { to: '/investments', icon: TrendingUp, label: 'Investments' },
   { to: '/savings-goals', icon: Target, label: 'Savings Goals' },
+  { to: '/debts', icon: CreditCard, label: 'Debts' },
   { to: '/import', icon: Upload, label: 'Import' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

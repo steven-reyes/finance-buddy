@@ -325,6 +325,47 @@ def get_monthly_insights(month: str) -> dict:
                 "message": f"{g['name']} is {pct}% funded ({_format_dollars(g['current_amount'])} of {_format_dollars(g['target_amount'])})",
             })
 
+        # --- Debt insights (if debts table exists) ---
+        try:
+            active_debts = conn.execute(
+                "SELECT * FROM debts WHERE status = 'active' ORDER BY priority ASC"
+            ).fetchall()
+
+            if active_debts:
+                total_owed = sum(d["current_balance"] for d in active_debts)
+                insights.append({
+                    "type": "info",
+                    "message": f"You have {len(active_debts)} active debt(s) totaling {_format_dollars(total_owed)}",
+                })
+
+                # Priority 1 housing warning
+                housing_debts = [d for d in active_debts if d["priority"] == 1]
+                for hd in housing_debts:
+                    if hd["current_balance"] > 0:
+                        insights.append({
+                            "type": "warning",
+                            "message": (
+                                f"\u26a0\ufe0f Unpaid rent risks housing -- "
+                                f"{_format_dollars(hd['current_balance'])} overdue on {hd['name']}"
+                            ),
+                        })
+
+                # Debt-to-income ratio
+                if income > 0:
+                    total_minimum = sum(d["minimum_payment"] for d in active_debts)
+                    if total_minimum > 0:
+                        dti = round(total_minimum / income * 100, 1)
+                        severity = "warning" if dti > 30 else "info"
+                        if dti > 50:
+                            severity = "negative"
+                        insights.append({
+                            "type": severity,
+                            "message": f"Debt-to-income ratio: {dti}% of this month's income goes to debt minimums",
+                        })
+        except Exception:
+            # debts table may not exist yet; skip gracefully
+            pass
+
         return {"month": month, "insights": insights}
     finally:
         conn.close()

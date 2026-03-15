@@ -10,6 +10,7 @@ export type { Investment, InvestmentSnapshot, InvestmentSummary } from './invest
 export type { SavingsGoal, SavingsGoalContribution } from './savings';
 export type { Tag } from './tag';
 export type { RecurringTemplate } from './recurring';
+export type { Debt, DebtPayment, DebtSummary, PayoffPlan, PaycheckAllocation } from './debt';
 export type {
   DashboardSummary,
   SpendingByCategory,

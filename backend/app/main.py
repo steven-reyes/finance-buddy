@@ -16,6 +16,7 @@ from app.routes import (
     csv_import,
     export,
     ocr,
+    debts,
 )
 
 
@@ -62,6 +63,7 @@ app.include_router(dashboard.router)
 app.include_router(csv_import.router)
 app.include_router(export.router)
 app.include_router(ocr.router)
+app.include_router(debts.router)
 
 
 @app.get("/api/health")
