@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from app.models.budget import BudgetCreate, BudgetUpdate, CopyForwardRequest
+from app.models.budget import BudgetCreate, BudgetUpdate, CopyForwardRequest, BulkBudgetCreate
 from app.services import budget_service
 
 router = APIRouter(prefix="/api/budgets", tags=["budgets"])
@@ -41,6 +41,12 @@ def delete_budget(budget_id: int):
             status_code=404,
             detail={"error": {"code": "NOT_FOUND", "message": "Budget not found"}},
         )
+
+
+@router.post("/bulk", status_code=201)
+def bulk_create_budgets(dto: BulkBudgetCreate):
+    items = [{"category_id": b.category_id, "limit_amount": b.limit_amount, "warn_threshold": b.warn_threshold} for b in dto.budgets]
+    return budget_service.bulk_create(dto.month, items)
 
 
 @router.post("/copy-forward")

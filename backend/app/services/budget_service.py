@@ -119,6 +119,25 @@ def delete(budget_id: int) -> bool:
         conn.close()
 
 
+def bulk_create(month: str, items: list) -> List[dict]:
+    """Create multiple budgets at once, skipping existing ones."""
+    conn = get_connection()
+    try:
+        for item in items:
+            try:
+                conn.execute(
+                    "INSERT INTO budgets (category_id, month, limit_amount, warn_threshold) VALUES (?, ?, ?, ?)",
+                    (item["category_id"], month, item["limit_amount"], item.get("warn_threshold", 80)),
+                )
+            except Exception:
+                # Skip if budget already exists for this category+month
+                pass
+        conn.commit()
+        return get_by_month(month)
+    finally:
+        conn.close()
+
+
 def copy_forward(target_month: str) -> List[dict]:
     conn = get_connection()
     try:

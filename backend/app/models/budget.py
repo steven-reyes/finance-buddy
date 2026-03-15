@@ -34,3 +34,14 @@ class BudgetWithSpending(Budget):
 
 class CopyForwardRequest(BaseModel):
     target_month: str = Field(pattern=r'^\d{4}-\d{2}$')
+
+
+class BudgetItem(BaseModel):
+    category_id: int
+    limit_amount: int = Field(gt=0)
+    warn_threshold: int = Field(default=80, ge=1, le=100)
+
+
+class BulkBudgetCreate(BaseModel):
+    month: str = Field(pattern=r'^\d{4}-\d{2}$')
+    budgets: List[BudgetItem] = Field(min_length=1)

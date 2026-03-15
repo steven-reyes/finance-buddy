@@ -62,6 +62,30 @@ export function useDeleteBudget() {
   });
 }
 
+export function useDetectIncome() {
+  return useQuery({
+    queryKey: ['dashboard', 'detect-income'],
+    queryFn: async () => {
+      const { data } = await api.get('/dashboard/detect-income');
+      return data as { detected_income: number; source: string; from_recurring: number; from_transactions: number };
+    },
+  });
+}
+
+export function useBulkCreateBudgets() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { month: string; budgets: { category_id: number; limit_amount: number; warn_threshold?: number }[] }) => {
+      const { data } = await api.post('/budgets/bulk', body);
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['budgets'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
 export function useCopyForward() {
   const qc = useQueryClient();
   return useMutation({

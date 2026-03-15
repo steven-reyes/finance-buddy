@@ -125,6 +125,66 @@ def get_monthly_trends(months: int = 6) -> List[dict]:
         conn.close()
 
 
+def detect_monthly_income() -> dict:
+    """Detect monthly income from recurring templates and recent transactions."""
+    conn = get_connection()
+    try:
+        # Check recurring income templates first
+        recurring_income = conn.execute(
+            "SELECT SUM(amount) as total FROM recurring_templates "
+            "WHERE type = 'income' AND is_active = 1 AND frequency = 'monthly'"
+        ).fetchone()
+        recurring_total = recurring_income["total"] or 0
+
+        # Also check biweekly (multiply by 2 for monthly equivalent)
+        biweekly_income = conn.execute(
+            "SELECT SUM(amount) as total FROM recurring_templates "
+            "WHERE type = 'income' AND is_active = 1 AND frequency = 'biweekly'"
+        ).fetchone()
+        biweekly_total = (biweekly_income["total"] or 0) * 2
+
+        # Also check weekly (multiply by 4)
+        weekly_income = conn.execute(
+            "SELECT SUM(amount) as total FROM recurring_templates "
+            "WHERE type = 'income' AND is_active = 1 AND frequency = 'weekly'"
+        ).fetchone()
+        weekly_total = (weekly_income["total"] or 0) * 4
+
+        # Yearly / 12
+        yearly_income = conn.execute(
+            "SELECT SUM(amount) as total FROM recurring_templates "
+            "WHERE type = 'income' AND is_active = 1 AND frequency = 'yearly'"
+        ).fetchone()
+        yearly_total = (yearly_income["total"] or 0) // 12
+
+        from_recurring = recurring_total + biweekly_total + weekly_total + yearly_total
+
+        # Fallback: average income from last 3 months of transactions
+        from_transactions = 0
+        if from_recurring == 0:
+            avg_row = conn.execute(
+                "SELECT AVG(monthly_income) as avg_income FROM ("
+                "  SELECT strftime('%Y-%m', date) as month, SUM(amount) as monthly_income "
+                "  FROM transactions WHERE type = 'income' "
+                "  GROUP BY strftime('%Y-%m', date) "
+                "  ORDER BY month DESC LIMIT 3"
+                ")"
+            ).fetchone()
+            from_transactions = int(avg_row["avg_income"] or 0)
+
+        detected = from_recurring if from_recurring > 0 else from_transactions
+        source = "recurring" if from_recurring > 0 else ("transactions" if from_transactions > 0 else "none")
+
+        return {
+            "detected_income": detected,
+            "source": source,
+            "from_recurring": from_recurring,
+            "from_transactions": from_transactions,
+        }
+    finally:
+        conn.close()
+
+
 def get_budget_health(month: str) -> List[dict]:
     conn = get_connection()
     try:
