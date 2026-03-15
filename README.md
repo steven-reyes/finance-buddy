@@ -5,7 +5,7 @@ A personal finance management web application that helps you track income, expen
 ## Features
 
 - **Dashboard** - At-a-glance view of net income, spending by category (donut chart), monthly income vs expense trends (bar chart), budget health, and recent transactions. Month picker for historical viewing. **Spending alerts** banner for near/over-budget categories. **Monthly insights** with auto-generated tips (spending changes, net status, goal progress). **Quick add** inline transaction form. **Upcoming bills** widget showing recurring expenses due in the next 7 days. **Month-over-month comparison** per-category spending deltas.
-- **Transaction Management** - Full CRUD for income and expense entries. Filter by type, category, tag, date range, and search text. Paginated list view with color-coded amounts. **Auto-categorize** suggests categories based on past transactions as you type descriptions. **Duplicate detection** warns when a similar transaction already exists (same amount within 3 days).
+- **Transaction Management** - Full CRUD for income and expense entries. Filter by type, category, tag, date range, and search text. Paginated list view with color-coded amounts. **Quick date presets** (Today, This Week, This Month, Last 30 Days, Last Month, All Time). **Filtered summary bar** showing total income/expenses/net for the current view. **Column sorting** — click Date, Description, Category, or Amount headers to sort. **Bulk select + delete** with checkboxes and select-all. **Export filtered CSV** downloads exactly what you're viewing. **Recurring badges** mark auto-generated transactions with a repeat icon. **Auto-categorize** suggests categories based on past transactions as you type descriptions. **Duplicate detection** warns when a similar transaction already exists (same amount within 3 days).
 - **Budget Tracking** - Set monthly spending limits per category. Visual progress bars turn green/yellow/red as you approach and exceed limits. Copy budgets forward month-to-month. **Smart Budget Wizard** auto-detects your income (from recurring templates or transaction history) and allocates budgets using proven frameworks (50/30/20, 70/20/10, 60/20/20, or custom percentages). Categories are pre-sorted into Needs/Wants/Savings tiers with editable amounts. Budget Summary Bar shows income vs budgeted vs remaining at a glance. **Auto-rebalancing** detects when your income changes (>5%) and offers one-click proportional scaling of all budgets. **Auto-budget for new months** — navigating to a month with no budgets auto-creates them using your saved framework, so you only need to set up once.
 - **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
@@ -264,7 +264,7 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 #### Transactions
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/transactions` | List with filters: `type`, `category_id`, `tag_id`, `start_date`, `end_date`, `search`, `page`, `limit` |
+| GET | `/api/transactions` | List with filters: `type`, `category_id`, `tag_id`, `start_date`, `end_date`, `search`, `page`, `limit`, `sort_by` (date/amount/description/category), `sort_order` (asc/desc). Returns `filtered_income`, `filtered_expenses`, `filtered_net` totals. |
 | GET | `/api/transactions/{id}` | Get single with category info and tags |
 | POST | `/api/transactions` | Create (amount in cents, `tag_ids` optional) |
 | PUT | `/api/transactions/{id}` | Update |
@@ -273,6 +273,7 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | POST | `/api/transactions/{id}/tags` | Set tags for a transaction (replaces existing) |
 | GET | `/api/transactions/suggest-category?description=...` | Auto-suggest category based on past transactions with similar descriptions. Returns category with confidence level (high/medium) |
 | GET | `/api/transactions/check-duplicates?amount=&description=&date=` | Check for potential duplicate transactions (same amount + similar description within 3 days) |
+| POST | `/api/transactions/bulk-delete` | Bulk delete transactions by ID list. Body: `[id1, id2, ...]` |
 
 #### Budgets
 | Method | Path | Description |
@@ -381,7 +382,7 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 #### Data Export
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/export/transactions?format=csv` | Export all transactions as CSV |
+| GET | `/api/export/transactions?format=csv` | Export transactions as CSV. Supports optional filters: `type`, `category_id`, `start_date`, `end_date`, `search` |
 | GET | `/api/export/all?format=json` | Export entire database as JSON (all tables including csv_imports, ocr_uploads) |
 | GET | `/api/export/backup` | Download raw SQLite file |
 
@@ -403,7 +404,7 @@ All errors return a consistent envelope:
 | Route | Page | Description |
 |-------|------|-------------|
 | `/` | Dashboard | Summary cards, spending alerts, monthly insights, quick add form, monthly trend chart, spending donut, month-over-month comparison, budget health bars, recent transactions, upcoming bills, paycheck arrival prompt for debt allocation, debt due date alerts |
-| `/transactions` | Transactions | Filterable, searchable, paginated transaction list with add/edit/delete |
+| `/transactions` | Transactions | Filterable, searchable, sortable, paginated list with quick date presets, filtered summary bar, bulk select/delete, export CSV, recurring badges |
 | `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector, auto-categorize suggestions, duplicate detection warnings, debt creditor matching with one-click payment logging |
 | `/transactions/{id}/edit` | Edit Transaction | Same form pre-populated with existing data |
 | `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward, Smart Setup Wizard (income detection + framework selection + auto-allocation), Budget Summary Bar, income change alert with one-click rebalance, auto-budget for new months |
