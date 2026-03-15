@@ -723,8 +723,10 @@ function DebtBalanceChart() {
               tickFormatter={(v: number) => `$${v.toLocaleString()}`}
             />
             <Tooltip
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem' }}
+              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem', color: '#e5e7eb' }}
               labelStyle={{ color: '#9ca3af' }}
+              itemStyle={{ color: '#e5e7eb' }}
+              cursor={{ stroke: '#374151' }}
               formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Balance']}
             />
             <Area

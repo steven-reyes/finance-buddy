@@ -95,8 +95,10 @@ export default function InvestmentDetail() {
               <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
               <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#e5e7eb' }}
                 labelStyle={{ color: '#e5e7eb' }}
+                itemStyle={{ color: '#e5e7eb' }}
+                cursor={{ stroke: '#374151' }}
                 formatter={(value: number) => [`$${value.toFixed(2)}`, 'Value']}
               />
               <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />

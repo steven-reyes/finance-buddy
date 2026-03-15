@@ -231,8 +231,10 @@ export default function Dashboard() {
                 <XAxis dataKey="month" stroke="#9ca3af" tick={{ fontSize: 12 }} />
                 <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#e5e7eb' }}
                   labelStyle={{ color: '#e5e7eb' }}
+                  itemStyle={{ color: '#e5e7eb' }}
+                  cursor={{ fill: 'rgba(55, 65, 81, 0.5)' }}
                   formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
                 />
                 <Legend />
@@ -272,7 +274,8 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#e5e7eb' }}
+                    itemStyle={{ color: '#e5e7eb' }}
                     formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
                   />
                 </PieChart>
