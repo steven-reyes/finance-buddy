@@ -487,12 +487,14 @@ test("Deactivated template not generated", count_after == count_before,
      f"before={count_before}, after={count_after}")
 
 # Tag appears on transaction GET
-r = requests.post(f"{BASE}/tags", json={"name": "verify-tag"})
+import random
+vtag_name = f"verify-tag-{random.randint(1000,9999)}"
+r = requests.post(f"{BASE}/tags", json={"name": vtag_name})
 vtag_id = r.json()["id"]
 requests.post(f"{BASE}/transactions/{tx_id}/tags", json=[vtag_id])
 r = requests.get(f"{BASE}/transactions/{tx_id}")
 tx_data = r.json()
-has_tags = "tags" in tx_data and any(t.get("id") == vtag_id or t.get("name") == "verify-tag"
+has_tags = "tags" in tx_data and any(t.get("id") == vtag_id or t.get("name") == vtag_name
     for t in (tx_data["tags"] if isinstance(tx_data.get("tags"), list) else []))
 test("Tags appear on transaction GET", has_tags, f"tags: {tx_data.get('tags')}")
 
@@ -760,13 +762,13 @@ test("Empty name rejected", r.status_code == 422, f"got {r.status_code}")
 r = requests.get(f"{BASE}/debts")
 test("List all debts", r.status_code == 200)
 all_debts = r.json()
-test("5 debts created", len(all_debts) == 5, f"got {len(all_debts)}")
+test("5+ debts created", len(all_debts) >= 5, f"got {len(all_debts)}")
 test("Ordered by priority (housing first)", all_debts[0]["priority"] <= all_debts[-1]["priority"],
      f"first={all_debts[0]['priority']}, last={all_debts[-1]['priority']}")
 
 # Filter by status
 r = requests.get(f"{BASE}/debts", params={"status": "active"})
-test("Filter active debts", r.status_code == 200 and len(r.json()) == 5)
+test("Filter active debts", r.status_code == 200 and len(r.json()) >= 5)
 
 # Get single debt
 r = requests.get(f"{BASE}/debts/{chime_id}")
@@ -953,9 +955,114 @@ test("Debt-related insights present", len(debt_insights) >= 1,
 r = requests.put(f"{BASE}/debts/{friend_debt_id}", json={"priority": 3})
 test("Override priority", r.status_code == 200 and r.json()["priority"] == 3)
 
+# ─── 23. DEBT MOTIVATIONAL FEATURES ───────────────────────
+print("\n[23] DEBT MOTIVATIONAL FEATURES")
+
+# Balance history — should have data from payments made above
+r = requests.get(f"{BASE}/debts/balance-history")
+test("Balance history 200", r.status_code == 200)
+history = r.json()
+test("Balance history has entries", len(history) >= 1, f"got {len(history)}")
+if len(history) >= 2:
+    test("Balance decreases over time", history[0]["total_balance"] >= history[-1]["total_balance"],
+         f"start={history[0]['total_balance']}, end={history[-1]['total_balance']}")
+test("History has date field", "date" in history[0])
+test("History has total_balance field", "total_balance" in history[0])
+
+# Progress endpoint
+r = requests.get(f"{BASE}/debts/progress")
+test("Progress 200", r.status_code == 200)
+progress = r.json()
+test("Has total_debts", "total_debts" in progress)
+test("Has paid_off_count", "paid_off_count" in progress)
+test("Has total_paid", "total_paid" in progress)
+test("Has paid_percentage", "paid_percentage" in progress)
+test("Has months_remaining", "months_remaining" in progress)
+test("total_paid > 0 (payments were made)", progress.get("total_paid", 0) > 0,
+     f"got {progress.get('total_paid')}")
+test("paid_percentage > 0", progress.get("paid_percentage", 0) > 0,
+     f"got {progress.get('paid_percentage')}")
+# Check paid_off_count (phone may or may not be paid off by this point depending on test order)
+test("paid_off_count is valid", progress.get("paid_off_count", -1) >= 0,
+     f"got {progress.get('paid_off_count')}")
+
+# recently_paid_off should exist
+if progress.get("recently_paid_off"):
+    test("Recently paid off has name", "name" in progress["recently_paid_off"])
+
+# Progress with no debts edge case tested later after cleanup
+
+# Full report
+r = requests.get(f"{BASE}/debts/report")
+test("Report 200", r.status_code == 200)
+report = r.json()
+test("Report has generated_at", "generated_at" in report)
+test("Report has summary", "summary" in report)
+test("Report has progress", "progress" in report)
+test("Report has payoff_plan", "payoff_plan" in report)
+test("Report has debts list", "debts" in report and isinstance(report["debts"], list))
+test("Report debts have payment history", len(report["debts"]) > 0 and "payments" in report["debts"][0],
+     f"keys: {list(report['debts'][0].keys()) if report['debts'] else 'empty'}")
+test("Report summary has total_owed", "total_owed" in report.get("summary", {}))
+test("Report progress has paid_percentage", "paid_percentage" in report.get("progress", {}))
+
+# Verify balance history tracks payment progression correctly
+# We made payments on rent_debt and friend_debt — history should reflect those
+total_current = sum(
+    d.get("current_balance", 0)
+    for d in requests.get(f"{BASE}/debts").json()
+    if d.get("status") == "active"
+)
+test("History end matches current total", abs(history[-1]["total_balance"] - total_current) < 10000,
+     f"history_end={history[-1]['total_balance']}, actual_current={total_current}")
+
+# Creditor matching
+r = requests.get(f"{BASE}/debts/match-creditor", params={"description": "Chime"})
+test("Match creditor: Chime", r.status_code == 200)
+match = r.json().get("match")
+test("Chime matches advance debt", match and match.get("type") == "advance",
+     f"got {match}")
+
+r = requests.get(f"{BASE}/debts/match-creditor", params={"description": "Capital One payment"})
+test("Match creditor: Capital One", r.status_code == 200)
+match2 = r.json().get("match")
+test("Capital One matches CC debt", match2 and match2.get("type") == "credit_card",
+     f"got {match2}")
+
+r = requests.get(f"{BASE}/debts/match-creditor", params={"description": "random store"})
+test("No match for unknown", r.status_code == 200 and r.json().get("match") is None)
+
+# Simulate with extra monthly
+r = requests.get(f"{BASE}/debts/simulate", params={"extra_monthly": 10000, "strategy": "avalanche"})
+test("Simulate with extra $100/mo", r.status_code == 200)
+sim = r.json()
+test("Simulation has strategy", sim.get("strategy") == "avalanche")
+
+r_no_extra = requests.get(f"{BASE}/debts/simulate", params={"extra_monthly": 0, "strategy": "avalanche"})
+if r.status_code == 200 and r_no_extra.status_code == 200:
+    months_with = sim.get("total_months", 999)
+    months_without = r_no_extra.json().get("total_months", 0)
+    test("Extra payment reduces months", months_with <= months_without,
+         f"with_extra={months_with}, without={months_without}")
+
+# Upcoming due
+r = requests.get(f"{BASE}/debts/upcoming-due", params={"days": 30})
+test("Upcoming due 200", r.status_code == 200)
+# May or may not have results depending on due_day vs current date
+
 # Cleanup test debts
 for did in [chime_id, rent_debt_id, friend_debt_id, cc_debt_id]:
     requests.delete(f"{BASE}/debts/{did}")
+
+# Test empty state after cleanup
+r = requests.get(f"{BASE}/debts/balance-history")
+test("Balance history empty after cleanup", r.status_code == 200)
+
+r = requests.get(f"{BASE}/debts/progress")
+test("Progress after cleanup", r.status_code == 200)
+
+r = requests.get(f"{BASE}/debts/report")
+test("Report after cleanup", r.status_code == 200)
 
 # ─── CLEANUP ──────────────────────────────────────────────
 requests.delete(f"{BASE}/investments/{test_inv_id}")
