@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Search, ArrowUp, ArrowDown, ArrowUpDown, Download, Repeat } from 'lucide-react';
 import { useTransactions, useDeleteTransaction, useBulkDeleteTransactions } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
 import { formatCents, formatDate } from '../lib/format';
-import { startOfWeek, startOfMonth, endOfMonth, subDays, subMonths, format } from 'date-fns';
-import type { TransactionFilters } from '../types';
+import { startOfWeek, startOfMonth, endOfMonth, subDays, subMonths, format, parseISO } from 'date-fns';
+import type { TransactionFilters, TransactionWithCategory } from '../types';
 
 type DatePreset = 'today' | 'this_week' | 'this_month' | 'last_30' | 'last_month' | 'all';
 
@@ -28,6 +28,36 @@ function getDatePresetRange(preset: DatePreset): { start_date?: string; end_date
     case 'all':
       return {};
   }
+}
+
+interface MonthGroup {
+  key: string; // "2026-03"
+  label: string; // "March 2026"
+  transactions: TransactionWithCategory[];
+  income: number;
+  expenses: number;
+  net: number;
+}
+
+function groupByMonth(transactions: TransactionWithCategory[]): MonthGroup[] {
+  const groups = new Map<string, TransactionWithCategory[]>();
+  for (const t of transactions) {
+    const key = t.date.substring(0, 7); // "2026-03"
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(t);
+  }
+  return Array.from(groups.entries()).map(([key, txns]) => {
+    const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const expenses = txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    return {
+      key,
+      label: format(parseISO(key + '-01'), 'MMMM yyyy'),
+      transactions: txns,
+      income,
+      expenses,
+      net: income - expenses,
+    };
+  });
 }
 
 export default function Transactions() {
@@ -333,7 +363,25 @@ export default function Transactions() {
                 </tr>
               </thead>
               <tbody>
-                {data.data.map((t) => (
+                {groupByMonth(data.data).map((group) => (
+                  <React.Fragment key={group.key}>
+                    {/* Month Header */}
+                    <tr className="bg-gray-800/60">
+                      <td colSpan={6} className="px-5 py-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-gray-200">{group.label}</span>
+                          <div className="flex items-center gap-4 text-xs">
+                            <span className="text-green-400">+{formatCents(group.income)}</span>
+                            <span className="text-red-400">-{formatCents(group.expenses)}</span>
+                            <span className={group.net >= 0 ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
+                              Net: {group.net >= 0 ? '+' : ''}{formatCents(group.net)}
+                            </span>
+                            <span className="text-gray-500">{group.transactions.length} txns</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    {group.transactions.map((t) => (
                   <tr key={t.id} className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors ${selectedIds.has(t.id) ? 'bg-blue-900/20' : ''}`}>
                     <td className="px-3 py-3">
                       <input
@@ -389,6 +437,8 @@ export default function Transactions() {
                       </div>
                     </td>
                   </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
