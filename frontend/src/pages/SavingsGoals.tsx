@@ -2,7 +2,20 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, X, Target, Trash2 } from 'lucide-react';
+import { Plus, X, Target, Trash2, ChevronDown } from 'lucide-react';
+
+const GOAL_CATEGORIES = [
+  { value: 'emergency', label: 'Emergency Fund', icon: '🏦', color: '#3b82f6' },
+  { value: 'vacation', label: 'Vacation / Travel', icon: '✈️', color: '#06b6d4' },
+  { value: 'down_payment', label: 'Down Payment', icon: '🏠', color: '#8b5cf6' },
+  { value: 'car', label: 'Car Purchase', icon: '🚗', color: '#f59e0b' },
+  { value: 'education', label: 'Education / Tuition', icon: '🎓', color: '#10b981' },
+  { value: 'wedding', label: 'Wedding', icon: '💍', color: '#ec4899' },
+  { value: 'home_improvement', label: 'Home Improvement', icon: '🔨', color: '#f97316' },
+  { value: 'debt_payoff', label: 'Debt Payoff', icon: '💳', color: '#ef4444' },
+  { value: 'retirement', label: 'Retirement Supplement', icon: '🏖️', color: '#14b8a6' },
+  { value: 'custom', label: 'Custom', icon: '🎯', color: '#6366f1' },
+];
 import {
   useSavingsGoals,
   useCreateGoal,
@@ -15,6 +28,7 @@ import { formatCents, formatDate, toCents } from '../lib/format';
 
 const goalSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  category: z.string().min(1, 'Category is required'),
   target_amount: z.number().positive('Target must be positive'),
   icon: z.string().optional(),
   color: z.string().optional(),
@@ -52,10 +66,13 @@ export default function SavingsGoals() {
   });
 
   const onCreateGoal = async (values: GoalFormValues) => {
+    const cat = GOAL_CATEGORIES.find(c => c.value === values.category);
     await createGoal.mutateAsync({
-      ...values,
+      name: values.name,
       target_amount: toCents(values.target_amount),
       deadline: values.deadline || undefined,
+      icon: values.category === 'custom' ? (values.icon || cat?.icon) : cat?.icon,
+      color: values.category === 'custom' ? (values.color || cat?.color) : cat?.color,
     });
     goalForm.reset();
     setShowGoalForm(false);
@@ -128,12 +145,19 @@ export default function SavingsGoals() {
               )}
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Icon (optional)</label>
-              <input
-                {...goalForm.register('icon')}
+              <label className="block text-sm text-gray-400 mb-1">Category</label>
+              <select
+                {...goalForm.register('category')}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g., house, car"
-              />
+              >
+                <option value="">Select category</option>
+                {GOAL_CATEGORIES.map(c => (
+                  <option key={c.value} value={c.value}>{c.icon} {c.label}</option>
+                ))}
+              </select>
+              {goalForm.formState.errors.category && (
+                <p className="text-red-400 text-xs mt-1">{goalForm.formState.errors.category.message}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Deadline (optional)</label>
@@ -143,14 +167,26 @@ export default function SavingsGoals() {
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Color (optional)</label>
-              <input
-                type="color"
-                {...goalForm.register('color')}
-                className="w-16 h-9 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer"
-              />
-            </div>
+            {goalForm.watch('category') === 'custom' && (
+              <>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Custom Icon</label>
+                  <input
+                    {...goalForm.register('icon')}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 🎯"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Custom Color</label>
+                  <input
+                    type="color"
+                    {...goalForm.register('color')}
+                    className="w-16 h-9 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer"
+                  />
+                </div>
+              </>
+            )}
             <div className="flex items-end">
               <button
                 type="submit"
