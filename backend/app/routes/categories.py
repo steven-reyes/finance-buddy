@@ -21,6 +21,17 @@ def create_category(dto: CategoryCreate):
         raise HTTPException(status_code=409, detail={"error": {"code": "DUPLICATE", "message": str(e)}})
 
 
+@router.get("/{category_id}")
+def get_category(category_id: int):
+    category = category_service.get_by_id(category_id)
+    if not category:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Category not found"}},
+        )
+    return category
+
+
 @router.put("/{category_id}")
 def update_category(category_id: int, dto: CategoryUpdate):
     try:

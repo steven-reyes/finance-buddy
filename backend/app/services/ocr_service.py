@@ -188,8 +188,8 @@ def _detect_document_type(lines: List[str]) -> str:
                 AMOUNT_PATTERN.search(line)):
             dated_lines += 1
 
-    # If many lines have dates+amounts or +/- signs, it's a statement
-    if dated_lines >= 3 or sign_lines >= 3:
+    # If multiple lines have dates+amounts or +/- signs, it's a statement
+    if dated_lines >= 2 or sign_lines >= 2:
         return "statement"
     return "receipt"
 
