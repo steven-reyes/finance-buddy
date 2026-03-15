@@ -10,6 +10,7 @@ A personal finance management web application that helps you track income, expen
 - **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
 - **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load. **Quick Setup Wizard** guides you through common income sources (salary, freelance) and expenses (rent, utilities, insurance, subscriptions like Netflix/Spotify with pre-filled prices) in a 3-step checklist flow. Shows net income summary before creating all templates at once.
+- **Debt Tracker** - Track all debts: cash advances (Chime, Dave), personal loans (friends, family), credit cards, overdue bills (rent, utilities), medical, and other. Auto-assigns priority (housing=1, advance=2, loan=3, credit card=4, personal=5). Log payments to reduce balances — auto-marks as paid off when balance reaches zero. **Paycheck Planner** shows a waterfall visualization of where every dollar goes in priority order (auto-deductions first, then housing, utilities, minimums, essentials for food/transport, extra debt payment, buffer) with shortfall warnings when the paycheck doesn't cover all obligations. **Payoff calculator** with avalanche (highest interest first) and snowball (smallest balance first) strategies showing estimated debt-free date. **Smart insights**: debt-to-income ratio, advance cycle cost, housing risk alerts.
 - **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
 - **Screenshot/OCR Import** - Upload photos of receipts, bank statements, or banking app screenshots. Tesseract OCR extracts text with image preprocessing (auto-rotate, contrast enhancement, dark mode inversion, upscaling). Smart parsing detects document type (receipt vs statement), filters totals/subtotals/tax/balance lines, handles round dollar amounts ($12, $1,200), signed amounts (-$82.40, +$2,600), and parenthesized negatives (82.40). Auto-detects income (deposits, "paid you") vs expenses. Deduplicates against existing transactions. Auto-suggests categories from history. Review and edit in an editable table before confirming.
 - **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
@@ -119,7 +120,8 @@ finance-buddy/
 │       ├── database.py               # SQLite connection, migrations, seed data
 │       ├── migrations/
 │       │   ├── 001_initial.sql       # Full database schema (12 tables)
-│       │   └── 002_ocr_confirmed_status.sql  # Add 'confirmed' status to ocr_uploads
+│       │   ├── 002_ocr_confirmed_status.sql  # Add 'confirmed' status to ocr_uploads
+│       │   └── 003_debts.sql                # Debts + debt_payments tables
 │       ├── models/                   # Pydantic models for validation
 │       │   ├── category.py
 │       │   ├── transaction.py
@@ -128,7 +130,8 @@ finance-buddy/
 │       │   ├── savings_goal.py
 │       │   ├── tag.py
 │       │   ├── recurring.py
-│       │   └── dashboard.py
+│       │   ├── dashboard.py
+│       │   └── debt.py               # Debt + DebtPayment + PaycheckAllocation models
 │       ├── services/                 # Business logic and SQL queries
 │       │   ├── category_service.py
 │       │   ├── transaction_service.py
@@ -139,7 +142,8 @@ finance-buddy/
 │       │   ├── recurring_service.py
 │       │   ├── dashboard_service.py
 │       │   ├── csv_service.py
-│       │   └── ocr_service.py        # Tesseract OCR + image preprocessing + smart parsing
+│       │   ├── ocr_service.py        # Tesseract OCR + image preprocessing + smart parsing
+│       │   └── debt_service.py       # Debt CRUD, payoff calculator, paycheck allocator
 │       └── routes/                   # API endpoint definitions
 │           ├── categories.py
 │           ├── transactions.py
@@ -151,6 +155,7 @@ finance-buddy/
 │           ├── dashboard.py
 │           ├── csv_import.py
 │           ├── ocr.py                # Screenshot/image OCR import
+│           ├── debts.py              # Debt tracker + paycheck planner
 │           └── export.py
 ├── frontend/                         # React/TypeScript frontend
 │   ├── package.json
@@ -173,7 +178,8 @@ finance-buddy/
 │       │   ├── useSavingsGoals.ts
 │       │   ├── useTags.ts
 │       │   ├── useRecurring.ts
-│       │   └── useDashboard.ts
+│       │   ├── useDashboard.ts
+│       │   └── useDebts.ts           # Debt CRUD, payments, summary, payoff, allocate hooks
 │       ├── lib/
 │       │   ├── api.ts                # Axios instance with error interceptor
 │       │   └── format.ts            # formatCents, formatDate, toCents, toDollars
@@ -186,7 +192,8 @@ finance-buddy/
 │       │   ├── savings.ts
 │       │   ├── tag.ts
 │       │   ├── recurring.ts
-│       │   └── dashboard.ts
+│       │   ├── dashboard.ts
+│       │   └── debt.ts               # Debt, DebtPayment, DebtSummary, PayoffPlan, PaycheckAllocation
 │       └── pages/                    # Route-level page components
 │           ├── Dashboard.tsx
 │           ├── Transactions.tsx
@@ -196,6 +203,7 @@ finance-buddy/
 │           ├── InvestmentDetail.tsx
 │           ├── SavingsGoals.tsx
 │           ├── Import.tsx
+│           ├── Debts.tsx              # Debt tracker, paycheck planner, payoff strategy
 │           └── Settings.tsx
 ├── data/                             # SQLite database file (gitignored)
 │   └── finance-buddy.db
@@ -225,6 +233,8 @@ SQLite database with 12 tables:
 | `transaction_tags` | Many-to-many junction. CASCADE on both sides. |
 | `csv_imports` | Audit trail for CSV imports with file hash for duplicate detection. |
 | `ocr_uploads` | Tracks uploaded images for OCR processing. Stores raw extracted text, parsed transaction data, and processing status (pending/processed/confirmed/failed). |
+| `debts` | Tracks all debts: advance, personal, credit card, loan, bill arrears, medical. Priority 1-10 (1=housing critical). Includes creditor, balance, minimum payment, interest rate, auto-deduct flag, status (active/paid_off/paused). |
+| `debt_payments` | Payment log for debts. Each payment reduces the debt balance. CASCADE on delete. Links optionally to a transaction. |
 | `_migrations` | Tracks applied SQL migration files. |
 
 ### Conventions
@@ -332,6 +342,21 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | POST | `/api/csv/upload` | Upload CSV file, returns headers + preview rows |
 | POST | `/api/csv/confirm` | Apply column mapping and bulk insert |
 
+#### Debts
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/debts` | List all debts (optional `?status=active\|paid_off\|paused`), ordered by priority |
+| GET | `/api/debts/summary` | Total owed, minimum monthly, interest cost, debts by priority |
+| GET | `/api/debts/payoff-plan?strategy=avalanche\|snowball` | Payoff timeline with estimated debt-free date per strategy |
+| POST | `/api/debts/allocate` | Paycheck allocation in priority order. Body: `{ paycheck_amount, pay_date }`. Returns waterfall with shortfall warnings |
+| GET | `/api/debts/insights` | Smart tips: debt-to-income ratio, advance cycle cost, housing risk alerts |
+| GET | `/api/debts/{id}` | Single debt with payment history |
+| POST | `/api/debts` | Create debt (auto-assigns priority from type) |
+| PUT | `/api/debts/{id}` | Update debt (balance, status, priority, etc.) |
+| DELETE | `/api/debts/{id}` | Delete debt (cascades payments) |
+| POST | `/api/debts/{id}/payments` | Log a payment (reduces balance, auto-marks paid_off at zero) |
+| GET | `/api/debts/{id}/payments` | List payment history for a debt |
+
 #### OCR Import
 | Method | Path | Description |
 |--------|------|-------------|
@@ -379,8 +404,56 @@ All errors return a consistent envelope:
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
 | `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
+| `/debts` | Debts | Summary cards (total owed, minimums, DTI ratio), paycheck planner with waterfall visualization, priority-ordered debt cards with payments, payoff strategy (avalanche/snowball) with debt-free date |
 | `/import` | Import | Tabbed: CSV import (4-step wizard for bank statement CSVs) and Screenshot/OCR import (3-step wizard for photos of receipts, bank screenshots, credit card statements) |
 | `/settings` | Settings | Tabbed: Categories, Recurring Templates (with Quick Setup Wizard), Tags, Data Export |
+
+## Debt Tracker & Paycheck Planner
+
+Designed for users in debt cycles — where paychecks are consumed by obligations before they arrive.
+
+### Debt Types & Auto-Priority
+
+| Type | Label | Auto-Priority | Example |
+|------|-------|---------------|---------|
+| `bill_arrears` | Overdue Bill | 1 (Critical) | Back rent, overdue ConEd |
+| `advance` | Cash Advance | 2 | Chime SpotMe, Dave |
+| `loan` | Loan | 3 | Auto loan, student loan |
+| `credit_card` | Credit Card | 4 | Capital One, Chase |
+| `personal` | Personal Loan | 5 | Money owed to friends/family |
+| `medical` | Medical Debt | 6 | Hospital bills |
+| `other` | Other | 7 | Miscellaneous |
+
+Priority 1 = pay first (affects housing stability). Users can override priorities.
+
+### Paycheck Planner
+
+Enter your next paycheck amount and see a waterfall allocation:
+
+1. **Auto-deductions** (taken before you see the money — Chime advances)
+2. **Housing/Critical** (priority 1 debts — rent arrears)
+3. **Utility arrears** (priority 2 — ConEd, phone, internet)
+4. **Minimum payments** (all other active debts)
+5. **Essentials** (food + transport — from budget data or $400 default)
+6. **Extra payment** (toward highest-interest debt)
+7. **Buffer** (what's left)
+
+If the paycheck doesn't cover all obligations, shows a shortfall warning with the deficit amount and advice to prioritize housing and food.
+
+### Payoff Strategies
+
+- **Avalanche**: Pay minimums on all debts, put extra toward highest interest rate first. Saves the most money long-term.
+- **Snowball**: Pay minimums on all debts, put extra toward smallest balance first. Provides faster psychological wins.
+
+Both calculate month-by-month simulation with interest, showing estimated payoff date per debt and total debt-free date.
+
+### Smart Debt Insights
+
+- Debt-to-income ratio with interpretation
+- "At current rate, debt-free by [date]"
+- "Paying $X extra/month saves $Y in interest"
+- Housing priority alerts when rent is unpaid
+- Advance cycle cost estimation
 
 ## Smart Setup Wizards
 
