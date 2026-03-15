@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTransaction, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
+import { useTags } from '../hooks/useTags';
 import { toCents, toDollars } from '../lib/format';
 
 const schema = z.object({
@@ -29,6 +30,8 @@ export default function TransactionForm() {
 
   const createTransaction = useCreateTransaction();
   const updateTransaction = useUpdateTransaction();
+  const { data: tags } = useTags();
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
 
   const {
     register,
@@ -62,6 +65,9 @@ export default function TransactionForm() {
         category_id: existing.category_id,
         notes: existing.notes || '',
       });
+      if (existing.tags && Array.isArray(existing.tags)) {
+        setSelectedTagIds(existing.tags.map((t: { id: number }) => t.id));
+      }
     }
   }, [existing, isEditing, reset]);
 
@@ -70,6 +76,7 @@ export default function TransactionForm() {
       ...values,
       amount: toCents(values.amount),
       category_id: values.category_id || null,
+      tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
     };
 
     if (isEditing) {
@@ -146,6 +153,40 @@ export default function TransactionForm() {
             ))}
           </select>
         </div>
+
+        {/* Tags */}
+        {tags && tags.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">Tags</label>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => {
+                const isSelected = selectedTagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTagIds((prev) =>
+                        isSelected ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                      );
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                      isSelected
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: tag.color || '#6b7280' }}
+                    />
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Date */}
         <div>

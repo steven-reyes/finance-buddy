@@ -119,9 +119,18 @@ def delete(budget_id: int) -> bool:
         conn.close()
 
 
-def copy_forward(source_month: str, target_month: str) -> List[dict]:
+def copy_forward(target_month: str) -> List[dict]:
     conn = get_connection()
     try:
+        row = conn.execute(
+            "SELECT DISTINCT month FROM budgets ORDER BY month DESC LIMIT 1"
+        ).fetchone()
+
+        if not row:
+            raise ValueError("No existing budgets found to copy from")
+
+        source_month = row["month"]
+
         source_budgets = conn.execute(
             "SELECT category_id, limit_amount, warn_threshold FROM budgets WHERE month = ?",
             (source_month,),

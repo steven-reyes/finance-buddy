@@ -1,8 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { Upload, CheckCircle, AlertCircle, FileText } from 'lucide-react';
-import { useCategories } from '../hooks/useCategories';
-import { useCreateTransaction } from '../hooks/useTransactions';
-import { toCents } from '../lib/format';
+import api from '../lib/api';
 
 type Step = 'upload' | 'map' | 'preview' | 'done';
 
@@ -20,8 +18,10 @@ interface ParsedRow {
 export default function Import() {
   const [step, setStep] = useState<Step>('upload');
   const [fileName, setFileName] = useState('');
+  const [fileHash, setFileHash] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
-  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
+  const [rowCount, setRowCount] = useState(0);
   const [mapping, setMapping] = useState<ColumnMapping>({
     date: '',
     amount: '',
@@ -29,54 +29,46 @@ export default function Import() {
     category: '',
   });
   const [defaultType, setDefaultType] = useState<'income' | 'expense'>('expense');
-  const [importResults, setImportResults] = useState({ success: 0, errors: 0 });
+  const [importResults, setImportResults] = useState({ imported: 0, errors: 0, total_rows: 0 });
   const [importing, setImporting] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: categories } = useCategories();
-  const createTransaction = useCreateTransaction();
-
-  const parseCSV = (text: string): { headers: string[]; rows: ParsedRow[] } => {
-    const lines = text.trim().split('\n');
-    if (lines.length < 2) return { headers: [], rows: [] };
-
-    const csvHeaders = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
-    const csvRows: ParsedRow[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map((v) => v.trim().replace(/^"|"$/g, ''));
-      const row: ParsedRow = {};
-      csvHeaders.forEach((h, idx) => {
-        row[h] = values[idx] || '';
-      });
-      csvRows.push(row);
-    }
-
-    return { headers: csvHeaders, rows: csvRows };
-  };
-
-  const handleFileSelect = useCallback((file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
+    setUploadError('');
     setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const { headers: h, rows: r } = parseCSV(text);
-      setHeaders(h);
-      setRows(r);
-      setStep('map');
 
-      // Auto-map common column names
-      const autoMap: ColumnMapping = { date: '', amount: '', description: '', category: '' };
-      h.forEach((col) => {
-        const lower = col.toLowerCase();
-        if (lower.includes('date')) autoMap.date = col;
-        if (lower.includes('amount')) autoMap.amount = col;
-        if (lower.includes('desc') || lower.includes('memo') || lower.includes('name')) autoMap.description = col;
-        if (lower.includes('categ')) autoMap.category = col;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const { data } = await api.post('/csv/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setMapping(autoMap);
-    };
-    reader.readAsText(file);
+
+      setFileHash(data.file_hash);
+      setHeaders(data.headers);
+      setPreviewRows(data.preview || []);
+      setRowCount(data.row_count);
+
+      // Use suggested mapping from backend
+      const suggested = data.suggested_mapping || {};
+      setMapping({
+        date: suggested.date || '',
+        amount: suggested.amount || '',
+        description: suggested.description || '',
+        category: suggested.category || '',
+      });
+
+      if (data.is_duplicate) {
+        setUploadError('Warning: This file appears to have been imported before.');
+      }
+
+      setStep('map');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: { message?: string } } } };
+      setUploadError(error.response?.data?.error?.message || 'Failed to upload file.');
+    }
   }, []);
 
   const handleDrop = useCallback(
@@ -96,47 +88,32 @@ export default function Import() {
 
   const handleImport = async () => {
     setImporting(true);
-    let success = 0;
-    let errors = 0;
+    try {
+      const columnMapping: Record<string, string> = {};
+      if (mapping.date) columnMapping.date = mapping.date;
+      if (mapping.amount) columnMapping.amount = mapping.amount;
+      if (mapping.description) columnMapping.description = mapping.description;
+      if (mapping.category) columnMapping.category = mapping.category;
 
-    const previewRows = rows.slice(0, 500);
+      const { data } = await api.post('/csv/confirm', {
+        filename: fileName,
+        file_hash: fileHash,
+        column_mapping: columnMapping,
+        default_type: defaultType,
+      });
 
-    for (const row of previewRows) {
-      try {
-        const amountStr = row[mapping.amount] || '0';
-        const amountNum = parseFloat(amountStr.replace(/[^0-9.-]/g, ''));
-        if (isNaN(amountNum)) {
-          errors++;
-          continue;
-        }
-
-        const type = amountNum < 0 ? 'expense' : defaultType;
-        const amount = toCents(Math.abs(amountNum));
-
-        const catName = row[mapping.category] || '';
-        const matchedCat = categories?.find(
-          (c) => c.name.toLowerCase() === catName.toLowerCase()
-        );
-
-        await createTransaction.mutateAsync({
-          type,
-          amount,
-          description: row[mapping.description] || 'Imported transaction',
-          date: row[mapping.date] || new Date().toISOString().split('T')[0],
-          category_id: matchedCat?.id || null,
-        });
-        success++;
-      } catch {
-        errors++;
-      }
+      setImportResults({
+        imported: data.imported || 0,
+        errors: (data.errors || []).length,
+        total_rows: data.total_rows || 0,
+      });
+      setStep('done');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: { message?: string } } } };
+      alert(error.response?.data?.error?.message || 'Import failed. Please try again.');
     }
-
-    setImportResults({ success, errors });
     setImporting(false);
-    setStep('done');
   };
-
-  const previewData = rows.slice(0, 20);
 
   const steps: { key: Step; label: string; num: number }[] = [
     { key: 'upload', label: 'Upload', num: 1 },
@@ -179,29 +156,37 @@ export default function Import() {
 
       {/* Step 1: Upload */}
       {step === 'upload' && (
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          className="bg-gray-900 rounded-xl border-2 border-dashed border-gray-700 hover:border-blue-500 p-16 text-center transition-colors cursor-pointer"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Upload size={48} className="mx-auto text-gray-500 mb-4" />
-          <p className="text-gray-300 mb-2">Drag and drop a CSV file here</p>
-          <p className="text-gray-500 text-sm mb-4">or click to browse</p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFileSelect(file);
-            }}
-          />
-          <div className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            <FileText size={16} />
-            Choose CSV File
+        <div>
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            className="bg-gray-900 rounded-xl border-2 border-dashed border-gray-700 hover:border-blue-500 p-16 text-center transition-colors cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={48} className="mx-auto text-gray-500 mb-4" />
+            <p className="text-gray-300 mb-2">Drag and drop a CSV file here</p>
+            <p className="text-gray-500 text-sm mb-4">or click to browse</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileSelect(file);
+              }}
+            />
+            <div className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              <FileText size={16} />
+              Choose CSV File
+            </div>
           </div>
+          {uploadError && (
+            <div className="mt-3 flex items-center gap-2 text-yellow-400 text-sm">
+              <AlertCircle size={16} />
+              {uploadError}
+            </div>
+          )}
         </div>
       )}
 
@@ -212,7 +197,7 @@ export default function Import() {
             <div>
               <h2 className="text-lg font-semibold">Map Columns</h2>
               <p className="text-sm text-gray-400 mt-1">
-                File: {fileName} ({rows.length} rows found)
+                File: {fileName} ({rowCount} rows found)
               </p>
             </div>
           </div>
@@ -268,7 +253,7 @@ export default function Import() {
               Next: Preview
             </button>
             <button
-              onClick={() => { setStep('upload'); setHeaders([]); setRows([]); }}
+              onClick={() => { setStep('upload'); setHeaders([]); setPreviewRows([]); setFileName(''); setFileHash(''); }}
               className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-5 py-2 rounded-lg text-sm transition-colors"
             >
               Back
@@ -280,7 +265,7 @@ export default function Import() {
       {/* Step 3: Preview */}
       {step === 'preview' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
-          <h2 className="text-lg font-semibold">Preview (first 20 rows)</h2>
+          <h2 className="text-lg font-semibold">Preview (first {previewRows.length} rows)</h2>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -294,7 +279,7 @@ export default function Import() {
                 </tr>
               </thead>
               <tbody>
-                {previewData.map((row, i) => {
+                {previewRows.map((row, i) => {
                   const amountStr = row[mapping.amount] || '0';
                   const amountNum = parseFloat(amountStr.replace(/[^0-9.-]/g, ''));
                   const type = amountNum < 0 ? 'expense' : defaultType;
@@ -321,7 +306,7 @@ export default function Import() {
           </div>
 
           <p className="text-sm text-gray-400">
-            {rows.length} total rows will be imported.
+            {rowCount} total rows will be imported.
           </p>
 
           <div className="flex gap-3">
@@ -330,7 +315,7 @@ export default function Import() {
               disabled={importing}
               className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              {importing ? 'Importing...' : `Import ${rows.length} Transactions`}
+              {importing ? 'Importing...' : `Import ${rowCount} Transactions`}
             </button>
             <button
               onClick={() => setStep('map')}
@@ -351,7 +336,7 @@ export default function Import() {
           <div className="space-y-2 mb-6">
             <p className="text-green-400 flex items-center justify-center gap-2">
               <CheckCircle size={16} />
-              {importResults.success} transactions imported successfully
+              {importResults.imported} transactions imported successfully
             </p>
             {importResults.errors > 0 && (
               <p className="text-red-400 flex items-center justify-center gap-2">
@@ -365,8 +350,9 @@ export default function Import() {
               onClick={() => {
                 setStep('upload');
                 setHeaders([]);
-                setRows([]);
+                setPreviewRows([]);
                 setFileName('');
+                setFileHash('');
               }}
               className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-5 py-2 rounded-lg text-sm transition-colors"
             >

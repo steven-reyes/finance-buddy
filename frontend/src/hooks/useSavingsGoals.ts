@@ -74,6 +74,18 @@ export function useContributions(goalId: number | undefined) {
   });
 }
 
+export function useDeleteContribution() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ goalId, contributionId }: { goalId: number; contributionId: number }) => {
+      await api.delete(`/savings-goals/${goalId}/contributions/${contributionId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['savings-goals'] });
+    },
+  });
+}
+
 export function useAddContribution() {
   const qc = useQueryClient();
   return useMutation({

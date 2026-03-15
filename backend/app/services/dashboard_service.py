@@ -77,7 +77,7 @@ def get_budget_health(month: str) -> List[dict]:
     conn = get_connection()
     try:
         budgets = conn.execute(
-            "SELECT b.*, c.name as category_name, c.color as category_color "
+            "SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon "
             "FROM budgets b "
             "JOIN categories c ON b.category_id = c.id "
             "WHERE b.month = ?",
@@ -110,6 +110,7 @@ def get_budget_health(month: str) -> List[dict]:
                 "category_id": bd["category_id"],
                 "category_name": bd["category_name"],
                 "category_color": bd["category_color"],
+                "category_icon": bd.get("category_icon"),
                 "limit_amount": limit_amt,
                 "spent": spent,
                 "remaining": remaining,

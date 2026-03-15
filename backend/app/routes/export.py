@@ -51,7 +51,8 @@ def export_all(format: str = Query(default="json")):
         data = {}
         tables = ["categories", "transactions", "budgets", "investments",
                    "investment_snapshots", "savings_goals", "savings_goal_contributions",
-                   "tags", "transaction_tags", "recurring_templates"]
+                   "tags", "transaction_tags", "recurring_templates",
+                   "csv_imports", "ocr_uploads"]
         for table in tables:
             rows = conn.execute(f"SELECT * FROM {table}").fetchall()
             data[table] = [dict(r) for r in rows]

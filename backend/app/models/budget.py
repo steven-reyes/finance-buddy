@@ -33,5 +33,4 @@ class BudgetWithSpending(Budget):
 
 
 class CopyForwardRequest(BaseModel):
-    source_month: str = Field(pattern=r'^\d{4}-\d{2}$')
     target_month: str = Field(pattern=r'^\d{4}-\d{2}$')

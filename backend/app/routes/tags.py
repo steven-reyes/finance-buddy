@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from typing import List
 from app.models.tag import TagCreate, TagUpdate
 from app.services import tag_service
 
@@ -49,7 +48,3 @@ def delete_tag(tag_id: int):
         )
 
 
-@router.post("/transactions/{transaction_id}/tags")
-def set_transaction_tags(transaction_id: int, tag_ids: List[int]):
-    tag_service.set_transaction_tags(transaction_id, tag_ids)
-    return {"message": "Tags updated"}

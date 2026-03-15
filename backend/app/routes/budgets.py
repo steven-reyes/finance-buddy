@@ -46,7 +46,7 @@ def delete_budget(budget_id: int):
 @router.post("/copy-forward")
 def copy_forward(dto: CopyForwardRequest):
     try:
-        budgets = budget_service.copy_forward(dto.source_month, dto.target_month)
+        budgets = budget_service.copy_forward(dto.target_month)
         return budgets
     except ValueError as e:
         raise HTTPException(

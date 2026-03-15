@@ -7,7 +7,7 @@ from app.models.transaction import (
     TransactionFilters,
     PaginatedTransactions,
 )
-from app.services import transaction_service
+from app.services import transaction_service, tag_service
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -78,3 +78,15 @@ def delete_transaction(transaction_id: int):
 def bulk_create_transactions(dtos: List[TransactionCreate]):
     created = transaction_service.bulk_create(dtos)
     return {"created": len(created), "transactions": created}
+
+
+@router.post("/{transaction_id}/tags")
+def set_transaction_tags(transaction_id: int, tag_ids: List[int]):
+    try:
+        tag_service.set_transaction_tags(transaction_id, tag_ids)
+        return {"message": "Tags updated"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": str(e)}},
+        )

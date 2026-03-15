@@ -65,8 +65,8 @@ export function useDeleteBudget() {
 export function useCopyForward() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ from, to }: { from: string; to: string }) => {
-      const { data } = await api.post('/budgets/copy-forward', { from, to });
+    mutationFn: async ({ target_month }: { target_month: string }) => {
+      const { data } = await api.post('/budgets/copy-forward', { target_month });
       return data;
     },
     onSuccess: () => {

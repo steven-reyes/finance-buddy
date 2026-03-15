@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, X, Target } from 'lucide-react';
+import { Plus, X, Target, Trash2 } from 'lucide-react';
 import {
   useSavingsGoals,
   useCreateGoal,
   useDeleteGoal,
   useAddContribution,
+  useContributions,
+  useDeleteContribution,
 } from '../hooks/useSavingsGoals';
 import { formatCents, formatDate, toCents } from '../lib/format';
 
@@ -36,6 +38,7 @@ export default function SavingsGoals() {
   const createGoal = useCreateGoal();
   const deleteGoal = useDeleteGoal();
   const addContribution = useAddContribution();
+  const deleteContribution = useDeleteContribution();
 
   const goalForm = useForm<GoalFormValues>({
     resolver: zodResolver(goalSchema),
@@ -209,6 +212,14 @@ export default function SavingsGoals() {
               {contribForm.formState.isSubmitting ? 'Adding...' : 'Add'}
             </button>
           </form>
+
+          {/* Contribution History */}
+          <ContributionHistory
+            goalId={contribGoalId}
+            onDelete={(contributionId) =>
+              deleteContribution.mutate({ goalId: contribGoalId, contributionId })
+            }
+          />
         </div>
       )}
 
@@ -293,6 +304,48 @@ export default function SavingsGoals() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function ContributionHistory({ goalId, onDelete }: { goalId: number; onDelete: (id: number) => void }) {
+  const { data: contributions, isLoading } = useContributions(goalId);
+
+  if (isLoading) {
+    return <div className="mt-4 text-gray-400 text-sm">Loading contributions...</div>;
+  }
+
+  if (!contributions || contributions.length === 0) {
+    return <div className="mt-4 text-gray-500 text-sm">No contributions yet.</div>;
+  }
+
+  return (
+    <div className="mt-4">
+      <h3 className="text-sm font-medium text-gray-300 mb-2">Contribution History</h3>
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {contributions.map((c) => (
+          <div
+            key={c.id}
+            className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
+          >
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-gray-400">{formatDate(c.date)}</span>
+              <span className="text-green-400 font-medium">{formatCents(c.amount)}</span>
+              {c.note && <span className="text-gray-500">{c.note}</span>}
+            </div>
+            <button
+              onClick={() => {
+                if (window.confirm('Delete this contribution?')) {
+                  onDelete(c.id);
+                }
+              }}
+              className="p-1 text-gray-500 hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

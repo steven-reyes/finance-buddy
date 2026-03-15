@@ -30,6 +30,7 @@ class BudgetHealth(BaseModel):
     category_id: int
     category_name: str
     category_color: Optional[str] = None
+    category_icon: Optional[str] = None
     limit_amount: int
     spent: int
     remaining: int

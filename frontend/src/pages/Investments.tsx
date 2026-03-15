@@ -18,7 +18,7 @@ const investmentSchema = z.object({
   type: z.string().min(1, 'Type is required'),
   institution: z.string().optional(),
   current_value: z.number().min(0),
-  total_contributions: z.number().min(0),
+  contributions: z.number().min(0),
   notes: z.string().optional(),
 });
 
@@ -44,7 +44,7 @@ export default function Investments() {
     resolver: zodResolver(investmentSchema),
     defaultValues: {
       current_value: 0,
-      total_contributions: 0,
+      contributions: 0,
     },
   });
 
@@ -52,7 +52,7 @@ export default function Investments() {
     await createInvestment.mutateAsync({
       ...values,
       current_value: toCents(values.current_value),
-      total_contributions: toCents(values.total_contributions),
+      contributions: toCents(values.contributions),
     });
     reset();
     setShowForm(false);
@@ -61,7 +61,7 @@ export default function Investments() {
   const handleUpdateValue = async (id: number) => {
     const val = parseFloat(newValue);
     if (isNaN(val) || val < 0) return;
-    await updateValue.mutateAsync({ id, value: toCents(val) });
+    await updateValue.mutateAsync({ id, current_value: toCents(val) });
     setUpdatingId(null);
     setNewValue('');
   };
@@ -99,10 +99,10 @@ export default function Investments() {
             </div>
             <div>
               <p className="text-sm text-gray-400 mb-1">Total Return</p>
-              <p className={`text-2xl font-bold ${summary.total_return >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {formatCents(summary.total_return)}{' '}
+              <p className={`text-2xl font-bold ${summary.total_gain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatCents(summary.total_gain)}{' '}
                 <span className="text-sm font-normal">
-                  ({summary.return_percentage >= 0 ? '+' : ''}{summary.return_percentage.toFixed(1)}%)
+                  ({summary.gain_percentage >= 0 ? '+' : ''}{summary.gain_percentage.toFixed(1)}%)
                 </span>
               </p>
             </div>
@@ -136,12 +136,11 @@ export default function Investments() {
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select type</option>
-                <option value="stock">Stock</option>
-                <option value="etf">ETF</option>
-                <option value="mutual_fund">Mutual Fund</option>
-                <option value="bond">Bond</option>
+                <option value="401k">401k</option>
+                <option value="ira">IRA</option>
+                <option value="brokerage">Brokerage</option>
+                <option value="hsa">HSA</option>
                 <option value="crypto">Crypto</option>
-                <option value="real_estate">Real Estate</option>
                 <option value="other">Other</option>
               </select>
               {errors.type && <p className="text-red-400 text-xs mt-1">{errors.type.message}</p>}
@@ -166,12 +165,12 @@ export default function Investments() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Total Contributions ($)</label>
+              <label className="block text-sm text-gray-400 mb-1">Contributions ($)</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                {...register('total_contributions', { valueAsNumber: true })}
+                {...register('contributions', { valueAsNumber: true })}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="0.00"
               />
@@ -205,9 +204,9 @@ export default function Investments() {
       ) : investments && investments.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {investments.map((inv) => {
-            const gainLoss = inv.current_value - inv.total_contributions;
-            const gainPct = inv.total_contributions > 0
-              ? ((gainLoss / inv.total_contributions) * 100).toFixed(1)
+            const gainLoss = inv.current_value - inv.contributions;
+            const gainPct = inv.contributions > 0
+              ? ((gainLoss / inv.contributions) * 100).toFixed(1)
               : '0.0';
             const isPositive = gainLoss >= 0;
 

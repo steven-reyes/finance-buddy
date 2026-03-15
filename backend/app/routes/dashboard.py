@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Query
-from app.services import dashboard_service
+from app.services import dashboard_service, recurring_service
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary")
 def get_summary(month: str = Query(..., pattern=r'^\d{4}-\d{2}$')):
+    recurring_service.generate_due_transactions()
     return dashboard_service.get_summary(month)
 
 

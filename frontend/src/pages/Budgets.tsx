@@ -47,10 +47,7 @@ export default function Budgets() {
   };
 
   const handleCopyForward = () => {
-    const [year, m] = month.split('-').map(Number);
-    const prevDate = new Date(year, m - 2, 1);
-    const from = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-    copyForward.mutate({ from, to: month });
+    copyForward.mutate({ target_month: month });
   };
 
   const handleDelete = (id: number) => {

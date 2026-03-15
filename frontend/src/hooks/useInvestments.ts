@@ -42,7 +42,7 @@ export function useCreateInvestment() {
       type: string;
       institution?: string;
       current_value: number;
-      total_contributions: number;
+      contributions: number;
       notes?: string;
     }) => {
       const { data } = await api.post('/investments', body);
@@ -77,8 +77,8 @@ export function useUpdateInvestment() {
 export function useUpdateInvestmentValue() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, value, date }: { id: number; value: number; date?: string }) => {
-      const { data } = await api.post(`/investments/${id}/value`, { value, date });
+    mutationFn: async ({ id, current_value, contributions }: { id: number; current_value: number; contributions?: number }) => {
+      const { data } = await api.put(`/investments/${id}/value`, { current_value, contributions });
       return data;
     },
     onSuccess: (_data, variables) => {

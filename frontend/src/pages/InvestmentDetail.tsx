@@ -15,12 +15,11 @@ export default function InvestmentDetail() {
   const updateValue = useUpdateInvestmentValue();
 
   const [newValue, setNewValue] = useState('');
-  const [valueDate, setValueDate] = useState(new Date().toISOString().split('T')[0]);
 
   const handleUpdateValue = async () => {
     const val = parseFloat(newValue);
     if (isNaN(val) || val < 0) return;
-    await updateValue.mutateAsync({ id: investmentId, value: toCents(val), date: valueDate });
+    await updateValue.mutateAsync({ id: investmentId, current_value: toCents(val) });
     setNewValue('');
   };
 
@@ -32,9 +31,9 @@ export default function InvestmentDetail() {
     return <div className="p-6 text-red-400">Investment not found.</div>;
   }
 
-  const gainLoss = investment.current_value - investment.total_contributions;
-  const gainPct = investment.total_contributions > 0
-    ? ((gainLoss / investment.total_contributions) * 100).toFixed(1)
+  const gainLoss = investment.current_value - investment.contributions;
+  const gainPct = investment.contributions > 0
+    ? ((gainLoss / investment.contributions) * 100).toFixed(1)
     : '0.0';
   const isPositive = gainLoss >= 0;
 
@@ -71,7 +70,7 @@ export default function InvestmentDetail() {
           </div>
           <div>
             <p className="text-sm text-gray-400 mb-1">Total Contributions</p>
-            <p className="text-2xl font-bold text-gray-200">{formatCents(investment.total_contributions)}</p>
+            <p className="text-2xl font-bold text-gray-200">{formatCents(investment.contributions)}</p>
           </div>
           <div>
             <p className="text-sm text-gray-400 mb-1">Gain / Loss</p>
@@ -122,15 +121,6 @@ export default function InvestmentDetail() {
               onChange={(e) => setNewValue(e.target.value)}
               className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
               placeholder="0.00"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Date</label>
-            <input
-              type="date"
-              value={valueDate}
-              onChange={(e) => setValueDate(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <button

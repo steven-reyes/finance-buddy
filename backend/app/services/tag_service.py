@@ -84,6 +84,9 @@ def delete(tag_id: int) -> bool:
 def set_transaction_tags(transaction_id: int, tag_ids: List[int]):
     conn = get_connection()
     try:
+        tx = conn.execute("SELECT id FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
+        if not tx:
+            raise ValueError("Transaction not found")
         conn.execute(
             "DELETE FROM transaction_tags WHERE transaction_id = ?",
             (transaction_id,),

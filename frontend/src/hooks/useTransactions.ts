@@ -41,6 +41,7 @@ export function useCreateTransaction() {
       date: string;
       category_id?: number | null;
       notes?: string;
+      tag_ids?: number[];
     }) => {
       const { data } = await api.post('/transactions', body);
       return data;
@@ -63,6 +64,7 @@ export function useUpdateTransaction() {
       date?: string;
       category_id?: number | null;
       notes?: string;
+      tag_ids?: number[];
     }) => {
       const { data } = await api.put(`/transactions/${id}`, body);
       return data;

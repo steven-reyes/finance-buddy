@@ -1,4 +1,5 @@
 from typing import Optional, List
+import calendar
 from datetime import datetime, timedelta, date
 from app.database import get_connection
 from app.models.recurring import RecurringCreate, RecurringUpdate
@@ -86,8 +87,8 @@ def delete(template_id: int) -> bool:
         conn.close()
 
 
-def _add_frequency(d: date, frequency: str) -> date:
-    """Compute the next date given a frequency."""
+def _add_frequency(d: date, frequency: str, original_day: int) -> date:
+    """Compute the next date given a frequency, preserving the original day of month."""
     if frequency == "weekly":
         return d + timedelta(weeks=1)
     elif frequency == "biweekly":
@@ -98,7 +99,8 @@ def _add_frequency(d: date, frequency: str) -> date:
         if month > 12:
             month = 1
             year += 1
-        day = min(d.day, 28)  # Safe day to avoid month overflow
+        last_day = calendar.monthrange(year, month)[1]
+        day = min(original_day, last_day)
         return date(year, month, day)
     elif frequency == "quarterly":
         month = d.month + 3
@@ -106,11 +108,14 @@ def _add_frequency(d: date, frequency: str) -> date:
         while month > 12:
             month -= 12
             year += 1
-        day = min(d.day, 28)
+        last_day = calendar.monthrange(year, month)[1]
+        day = min(original_day, last_day)
         return date(year, month, day)
     elif frequency == "yearly":
-        day = min(d.day, 28)
-        return date(d.year + 1, d.month, day)
+        year = d.year + 1
+        last_day = calendar.monthrange(year, d.month)[1]
+        day = min(original_day, last_day)
+        return date(year, d.month, day)
     return d
 
 
@@ -133,10 +138,12 @@ def generate_due_transactions() -> int:
                 if end_date < today:
                     continue
 
+            original_day = start.day
+
             # Determine the next date to generate from
             if t["last_generated"]:
                 last_gen = datetime.strptime(t["last_generated"], "%Y-%m-%d").date()
-                next_date = _add_frequency(last_gen, t["frequency"])
+                next_date = _add_frequency(last_gen, t["frequency"], original_day)
             else:
                 next_date = start
 
@@ -157,7 +164,7 @@ def generate_due_transactions() -> int:
                     (next_date.isoformat(), t["id"]),
                 )
 
-                next_date = _add_frequency(next_date, t["frequency"])
+                next_date = _add_frequency(next_date, t["frequency"], original_day)
 
         conn.commit()
         return generated_count

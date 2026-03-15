@@ -4,7 +4,7 @@ export interface RecurringTemplate {
   amount: number;
   description: string;
   category_id: number | null;
-  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+  frequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
   start_date: string;
   end_date: string | null;
   next_due: string;
