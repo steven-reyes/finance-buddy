@@ -4,6 +4,15 @@
 
 Finance Buddy is a personal finance management web application that helps users track income, expenses, investments, and savings goals to maintain a net-positive monthly balance. All data is stored locally for maximum privacy.
 
+## Conventions
+
+- **Amounts**: Always stored as positive integers in cents. The `type` field ('income'/'expense') determines sign in calculations. Validated: amount > 0.
+- **Dates**: Stored as ISO text 'YYYY-MM-DD'. Months as 'YYYY-MM'.
+- **Currency**: USD hardcoded for MVP. Currency symbol configurable later.
+- **Security**: Express binds to `127.0.0.1` only (not `0.0.0.0`). No auth for MVP since local-only.
+- **Error responses**: Standard envelope: `{ error: { code: string, message: string, details?: unknown } }` with appropriate HTTP status codes.
+- **Foreign key enforcement**: `PRAGMA foreign_keys = ON` set on every connection.
+
 ## Decisions
 
 | Decision | Choice | Rationale |
@@ -23,11 +32,12 @@ Finance Buddy is a personal finance management web application that helps users 
 | Column | Type | Notes |
 |--------|------|-------|
 | id | INTEGER PK | Auto-increment |
-| name | TEXT NOT NULL | Unique |
+| name | TEXT NOT NULL | |
 | type | TEXT NOT NULL | 'income' or 'expense' |
 | color | TEXT | Hex color for charts |
 | icon | TEXT | Emoji or icon name |
 | is_default | INTEGER | 1 for system defaults, 0 for user-created |
+| UNIQUE | (name, type) | Same name allowed across income/expense |
 
 ### transactions
 | Column | Type | Notes |
@@ -38,10 +48,10 @@ Finance Buddy is a personal finance management web application that helps users 
 | date | TEXT NOT NULL | ISO date YYYY-MM-DD |
 | description | TEXT NOT NULL | |
 | notes | TEXT | Optional |
-| category_id | INTEGER FK | References categories.id |
-| recurring_template_id | INTEGER FK | NULL if not from recurring |
-| csv_import_id | INTEGER FK | NULL if not from CSV import |
-| ocr_upload_id | INTEGER FK | NULL if not from OCR |
+| category_id | INTEGER FK | References categories.id ON DELETE SET NULL |
+| recurring_template_id | INTEGER FK | NULL if not from recurring, ON DELETE SET NULL |
+| csv_import_id | INTEGER FK | NULL if not from CSV import, ON DELETE SET NULL |
+| ocr_upload_id | INTEGER FK | NULL if not from OCR, ON DELETE SET NULL |
 | created_at | TEXT | ISO timestamp |
 | updated_at | TEXT | ISO timestamp |
 
@@ -66,7 +76,7 @@ Finance Buddy is a personal finance management web application that helps users 
 | category_id | INTEGER FK | References categories.id |
 | month | TEXT NOT NULL | 'YYYY-MM' |
 | limit_amount | INTEGER NOT NULL | Cents |
-| warn_threshold | INTEGER | Percentage (e.g., 80) to trigger warning |
+| warn_threshold | INTEGER NOT NULL DEFAULT 80 | Percentage 1-100 to trigger warning |
 | UNIQUE | (category_id, month) | One budget per category per month |
 
 ### investments
@@ -85,7 +95,7 @@ Finance Buddy is a personal finance management web application that helps users 
 | Column | Type | Notes |
 |--------|------|-------|
 | id | INTEGER PK | Auto-increment |
-| investment_id | INTEGER FK | References investments.id |
+| investment_id | INTEGER FK | References investments.id ON DELETE CASCADE |
 | value | INTEGER NOT NULL | Cents |
 | contributions | INTEGER | Cumulative contributions at this point |
 | recorded_at | TEXT NOT NULL | ISO timestamp |
@@ -96,10 +106,20 @@ Finance Buddy is a personal finance management web application that helps users 
 | id | INTEGER PK | Auto-increment |
 | name | TEXT NOT NULL | e.g., "Emergency Fund" |
 | target_amount | INTEGER NOT NULL | Cents |
-| current_amount | INTEGER NOT NULL | Cents |
+| current_amount | INTEGER NOT NULL | Cents, computed from contributions |
 | deadline | TEXT | ISO date, optional |
 | icon | TEXT | Emoji |
 | is_completed | INTEGER | 1 or 0 |
+
+### savings_goal_contributions
+| Column | Type | Notes |
+|--------|------|-------|
+| id | INTEGER PK | Auto-increment |
+| goal_id | INTEGER FK | References savings_goals.id ON DELETE CASCADE |
+| amount | INTEGER NOT NULL | Cents (positive = deposit, negative = withdrawal) |
+| date | TEXT NOT NULL | ISO date |
+| note | TEXT | Optional description |
+| transaction_id | INTEGER FK | Optional link to a transaction, ON DELETE SET NULL |
 
 ### tags
 | Column | Type | Notes |
@@ -111,8 +131,8 @@ Finance Buddy is a personal finance management web application that helps users 
 ### transaction_tags
 | Column | Type | Notes |
 |--------|------|-------|
-| transaction_id | INTEGER FK | References transactions.id |
-| tag_id | INTEGER FK | References tags.id |
+| transaction_id | INTEGER FK | References transactions.id ON DELETE CASCADE |
+| tag_id | INTEGER FK | References tags.id ON DELETE CASCADE |
 | PRIMARY KEY | (transaction_id, tag_id) | Junction table |
 
 ### csv_imports
@@ -120,6 +140,7 @@ Finance Buddy is a personal finance management web application that helps users 
 |--------|------|-------|
 | id | INTEGER PK | Auto-increment |
 | filename | TEXT NOT NULL | Original filename |
+| file_hash | TEXT | SHA-256 of file content for duplicate detection |
 | row_count | INTEGER | Number of rows imported |
 | column_mapping | TEXT | JSON of the mapping used |
 | imported_at | TEXT | ISO timestamp |
@@ -168,7 +189,7 @@ Finance Buddy is a personal finance management web application that helps users 
 | POST | /api/budgets | Create/upsert |
 | PUT | /api/budgets/:id | Update |
 | DELETE | /api/budgets/:id | Delete |
-| POST | /api/budgets/copy-forward | Copy previous month's budgets |
+| POST | /api/budgets/copy-forward | Copy budgets from most recent month that has them to target month. Body: `{ targetMonth: "YYYY-MM" }`. Skips categories that already have a budget in target month. |
 
 ### Investments
 | Method | Path | Description |
@@ -177,7 +198,7 @@ Finance Buddy is a personal finance management web application that helps users 
 | GET | /api/investments/:id | Get with recent snapshots |
 | POST | /api/investments | Create |
 | PUT | /api/investments/:id | Update |
-| PUT | /api/investments/:id/value | Update current value (creates snapshot) |
+| PUT | /api/investments/:id/value | Update current value + contributions (creates snapshot with cumulative values). Body: `{ currentValue: number, contributions?: number }` |
 | DELETE | /api/investments/:id | Delete with snapshots |
 | GET | /api/investments/:id/snapshots | Value history |
 | GET | /api/investments/summary | Total portfolio summary |
@@ -185,17 +206,28 @@ Finance Buddy is a personal finance management web application that helps users 
 ### Savings Goals
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | /api/savings-goals | List all |
+| GET | /api/savings-goals | List all (with computed current_amount from contributions) |
 | POST | /api/savings-goals | Create |
-| PUT | /api/savings-goals/:id | Update (including current_amount) |
-| DELETE | /api/savings-goals/:id | Delete |
+| PUT | /api/savings-goals/:id | Update (name, target, deadline, icon) |
+| DELETE | /api/savings-goals/:id | Delete (cascades contributions) |
+| GET | /api/savings-goals/:id/contributions | List contributions for a goal |
+| POST | /api/savings-goals/:id/contributions | Add a contribution (amount, date, note, optional transaction_id) |
+| DELETE | /api/savings-goals/:id/contributions/:cid | Remove a contribution |
+
+### Data Export
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/export/transactions?format=csv | Export all transactions as CSV |
+| GET | /api/export/all?format=json | Export entire database as JSON (all tables) |
+| GET | /api/export/backup | Download raw SQLite database file |
 
 ### Tags
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /api/tags | List all |
 | POST | /api/tags | Create |
-| DELETE | /api/tags/:id | Delete (removes from all transactions) |
+| PUT | /api/tags/:id | Update name/color |
+| DELETE | /api/tags/:id | Delete (cascades to transaction_tags) |
 | POST | /api/transactions/:id/tags | Set tags for a transaction |
 
 ### Recurring Templates
@@ -259,23 +291,26 @@ Hybrid layout combining two approaches:
 ## Key User Flows
 
 ### Adding a Transaction
-Transactions page → "Add" button → modal/form (type toggle, amount, category, date, description, tags) → save → budget progress updates → dashboard refreshes
+Transactions page → "Add" button → navigates to `/transactions/new` (dedicated page, not modal — supports direct linking and responsive design) → form with type toggle, amount, category, date, description, tags → save → redirect to transactions list → budget progress updates → dashboard refreshes
 
 ### CSV Import (4-step wizard)
-1. **Upload**: Drag-and-drop or file picker → server parses with PapaParse → returns headers + preview rows
-2. **Map Columns**: User maps CSV columns to fields (date, amount, description, category) via dropdowns
-3. **Preview**: Shows first 20 rows as they'll be imported → user verifies
-4. **Confirm**: Bulk insert in single SQLite transaction → success summary with count + any errors
+1. **Upload**: Drag-and-drop or file picker → server parses with PapaParse → checks file_hash against csv_imports for duplicate detection → returns headers + preview rows (+ warning if same file was imported before)
+2. **Map Columns**: User maps CSV columns to fields (date, amount, description, category) via dropdowns. Supports: separate debit/credit columns, "invert sign" toggle for banks that export expenses as positive, date format selector (MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD auto-detected), amount parsing (strips currency symbols, handles commas, parenthesized negatives)
+3. **Preview**: Shows first 20 rows as they'll be imported → highlights potential duplicates (matching date+amount+description) in yellow → user verifies
+4. **Confirm**: Bulk insert in single SQLite transaction → success summary with count + duplicate warnings + any validation errors
 
 ### Screenshot OCR Import
-1. **Upload**: Select image → server runs Tesseract.js → extracts text
-2. **Review**: Parsed transactions shown in editable table → user corrects amounts/dates/descriptions
-3. **Confirm**: Approved transactions bulk inserted
+Scope: Supports single receipts (one total amount + merchant + date) and simple bank statement screenshots (tabular rows of transactions). Not intended for complex multi-page documents.
+1. **Upload**: Select image (JPG/PNG) → server runs Tesseract.js → extracts raw text
+2. **Parse**: Server applies regex heuristics to extract: dollar amounts (`$X.XX`), dates (common formats), and surrounding text as descriptions. Returns structured candidates.
+3. **Review**: Parsed transactions shown in editable table → user corrects/removes/adds entries → each row has type, amount, date, description, category fields
+4. **Confirm**: Approved transactions bulk inserted
 
 ### Recurring Transaction Generation
 - Templates define amount, category, frequency, start date
 - On server startup: generates all missed transactions since last generation
-- Manual trigger via API for on-demand generation
+- On dashboard load: triggers generation check (handles long-running server)
+- Manual trigger via `POST /api/recurring/generate` for on-demand generation
 - `last_generated` field ensures idempotency (no duplicates)
 
 ### Budget Alerts
@@ -476,6 +511,12 @@ finance-buddy/
 - Data export (JSON/CSV)
 - Responsive design pass
 - Loading states and skeleton screens
+
+## Default Seed Categories
+
+**Expense:** Rent/Mortgage, Groceries, Utilities, Transportation, Entertainment, Dining Out, Healthcare, Insurance, Subscriptions, Clothing, Education, Personal Care, Other Expense
+
+**Income:** Salary, Freelance, Interest/Dividends, Gifts, Refunds, Other Income
 
 ## Configuration
 

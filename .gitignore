@@ -1,1 +1,9 @@
-node_modules/\ndata/\n.superpowers/\ndist/\n.env
+node_modules/
+data/
+.superpowers/
+dist/
+.env
+venv/
+__pycache__/
+*.pyc
+uploads/
