@@ -113,16 +113,7 @@ export default function Dashboard() {
       )}
 
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <Link
-            to="/transactions/new"
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-          >
-            <Plus size={14} />
-            Add Transaction
-          </Link>
-        </div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
         <input
           type="month"
           value={month}
