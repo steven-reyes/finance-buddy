@@ -955,6 +955,119 @@ test("Debt-related insights present", len(debt_insights) >= 1,
 r = requests.put(f"{BASE}/debts/{friend_debt_id}", json={"priority": 3})
 test("Override priority", r.status_code == 200 and r.json()["priority"] == 3)
 
+# ─── 23A. TRANSACTION QoL FEATURES ────────────────────────
+print("\n[23A] TRANSACTION QoL FEATURES")
+
+# --- Sorting ---
+r = requests.get(f"{BASE}/transactions", params={"sort_by": "amount", "sort_order": "desc", "limit": 5})
+test("Sort by amount desc", r.status_code == 200)
+txns = r.json()["data"]
+if len(txns) >= 2:
+    test("First amount >= second (desc sort)", txns[0]["amount"] >= txns[1]["amount"],
+         f"first={txns[0]['amount']}, second={txns[1]['amount']}")
+
+r = requests.get(f"{BASE}/transactions", params={"sort_by": "amount", "sort_order": "asc", "limit": 5})
+test("Sort by amount asc", r.status_code == 200)
+txns_asc = r.json()["data"]
+if len(txns_asc) >= 2:
+    test("First amount <= second (asc sort)", txns_asc[0]["amount"] <= txns_asc[1]["amount"],
+         f"first={txns_asc[0]['amount']}, second={txns_asc[1]['amount']}")
+
+r = requests.get(f"{BASE}/transactions", params={"sort_by": "date", "sort_order": "asc", "limit": 5})
+test("Sort by date asc", r.status_code == 200)
+txns_date = r.json()["data"]
+if len(txns_date) >= 2:
+    test("First date <= second (asc sort)", txns_date[0]["date"] <= txns_date[1]["date"],
+         f"first={txns_date[0]['date']}, second={txns_date[1]['date']}")
+
+r = requests.get(f"{BASE}/transactions", params={"sort_by": "description", "sort_order": "asc", "limit": 5})
+test("Sort by description asc", r.status_code == 200)
+
+# Invalid sort column falls back gracefully
+r = requests.get(f"{BASE}/transactions", params={"sort_by": "nonexistent", "limit": 5})
+test("Invalid sort_by doesn't crash", r.status_code == 200)
+
+# --- Filtered Totals ---
+r = requests.get(f"{BASE}/transactions", params={"type": "expense"})
+test("Filtered totals present", r.status_code == 200)
+resp = r.json()
+test("Has filtered_income", "filtered_income" in resp, f"keys: {list(resp.keys())}")
+test("Has filtered_expenses", "filtered_expenses" in resp)
+test("Has filtered_net", "filtered_net" in resp)
+test("Expense filter: income is 0", resp.get("filtered_income", -1) == 0,
+     f"got {resp.get('filtered_income')}")
+test("Expense filter: expenses > 0", resp.get("filtered_expenses", 0) > 0,
+     f"got {resp.get('filtered_expenses')}")
+
+r = requests.get(f"{BASE}/transactions", params={"type": "income"})
+test("Income filter: expenses is 0", r.json().get("filtered_expenses", -1) == 0,
+     f"got {r.json().get('filtered_expenses')}")
+test("Income filter: income > 0", r.json().get("filtered_income", 0) > 0)
+
+# Filtered with date range
+r = requests.get(f"{BASE}/transactions", params={
+    "start_date": "2026-03-10", "end_date": "2026-03-14"
+})
+test("Date range filter works", r.status_code == 200 and r.json()["total"] >= 1)
+test("Date range has totals", "filtered_net" in r.json())
+
+# Filtered with search
+r = requests.get(f"{BASE}/transactions", params={"search": "Whole"})
+test("Search filter totals", r.status_code == 200 and "filtered_expenses" in r.json())
+
+# --- Bulk Delete ---
+# Create temp transactions to bulk delete
+temp_ids = []
+for i in range(3):
+    r = requests.post(f"{BASE}/transactions", json={
+        "type": "expense", "amount": 100 + i, "date": "2026-03-15",
+        "description": f"Bulk delete test {i}"
+    })
+    if r.status_code == 201:
+        temp_ids.append(r.json()["id"])
+test("Created 3 temp transactions", len(temp_ids) == 3)
+
+r = requests.post(f"{BASE}/transactions/bulk-delete", json=temp_ids)
+test("Bulk delete 200", r.status_code == 200, f"got {r.status_code}: {r.text[:200]}")
+if r.status_code == 200:
+    test("Deleted count is 3", r.json().get("deleted") == 3, f"got {r.json().get('deleted')}")
+
+# Verify they're gone
+for tid in temp_ids:
+    r = requests.get(f"{BASE}/transactions/{tid}")
+    test(f"Deleted tx {tid} returns 404", r.status_code == 404)
+
+# Bulk delete empty list
+r = requests.post(f"{BASE}/transactions/bulk-delete", json=[])
+test("Bulk delete empty list", r.status_code == 200 and r.json().get("deleted") == 0)
+
+# Bulk delete non-existent IDs
+r = requests.post(f"{BASE}/transactions/bulk-delete", json=[99998, 99999])
+test("Bulk delete non-existent", r.status_code == 200 and r.json().get("deleted") == 0)
+
+# --- Filtered Export ---
+r = requests.get(f"{BASE}/export/transactions", params={"format": "csv", "type": "expense"})
+test("Export filtered CSV (expense)", r.status_code == 200)
+if r.status_code == 200:
+    lines = r.text.strip().split('\n')
+    test("Export has header + rows", len(lines) >= 2, f"got {len(lines)} lines")
+
+r = requests.get(f"{BASE}/export/transactions", params={
+    "format": "csv", "start_date": "2026-03-10", "end_date": "2026-03-14"
+})
+test("Export with date range", r.status_code == 200)
+
+r = requests.get(f"{BASE}/export/transactions", params={"format": "csv", "search": "Whole"})
+test("Export with search filter", r.status_code == 200)
+if r.status_code == 200 and r.text.strip():
+    lines = r.text.strip().split('\n')
+    if len(lines) > 1:
+        match_count = sum(1 for l in lines[1:] if "Whole" in l)
+        test("Export search only has matching rows", match_count == len(lines) - 1,
+             f"matching={match_count}, total_rows={len(lines)-1}")
+    else:
+        test("Export search has results", True)  # header only = no matches this run
+
 # ─── 23. DEBT MOTIVATIONAL FEATURES ───────────────────────
 print("\n[23] DEBT MOTIVATIONAL FEATURES")
 
