@@ -10,7 +10,7 @@ A personal finance management web application that helps you track income, expen
 - **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
 - **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load. **Quick Setup Wizard** guides you through common income sources (salary, freelance) and expenses (rent, utilities, insurance, subscriptions like Netflix/Spotify with pre-filled prices) in a 3-step checklist flow. Shows net income summary before creating all templates at once.
-- **Debt Tracker** - Track all debts: cash advances (Chime, Dave), personal loans (friends, family), credit cards, overdue bills (rent, utilities), medical, and other. Auto-assigns priority (housing=1, advance=2, loan=3, credit card=4, personal=5). Log payments to reduce balances — auto-marks as paid off when balance reaches zero. **Paycheck Planner** shows a waterfall visualization of where every dollar goes in priority order (auto-deductions first, then housing, utilities, minimums, essentials for food/transport, extra debt payment, buffer) with shortfall warnings when the paycheck doesn't cover all obligations. **Payoff calculator** with avalanche (highest interest first) and snowball (smallest balance first) strategies showing estimated debt-free date. **Smart insights**: debt-to-income ratio, advance cycle cost, housing risk alerts.
+- **Debt Tracker** - Track all debts: cash advances (Chime, Dave), personal loans (friends, family), credit cards, overdue bills (rent, utilities), medical, and other. Auto-assigns priority (housing=1, advance=2, loan=3, credit card=4, personal=5). Log payments to reduce balances — auto-marks as paid off when balance reaches zero. **Paycheck Planner** shows a waterfall visualization of where every dollar goes in priority order (auto-deductions first, then housing, utilities, minimums, essentials for food/transport, extra debt payment, buffer) with shortfall warnings when the paycheck doesn't cover all obligations. **Payoff calculator** with avalanche (highest interest first) and snowball (smallest balance first) strategies showing estimated debt-free date. **Smart insights**: debt-to-income ratio, advance cycle cost, housing risk alerts. **Interactive**: expenses auto-match to debt creditors for one-click payment logging, "What if" simulator for exploring extra payment scenarios, paycheck arrival prompts on dashboard, due date alerts with urgency color-coding.
 - **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
 - **Screenshot/OCR Import** - Upload photos of receipts, bank statements, or banking app screenshots. Tesseract OCR extracts text with image preprocessing (auto-rotate, contrast enhancement, dark mode inversion, upscaling). Smart parsing detects document type (receipt vs statement), filters totals/subtotals/tax/balance lines, handles round dollar amounts ($12, $1,200), signed amounts (-$82.40, +$2,600), and parenthesized negatives (82.40). Auto-detects income (deposits, "paid you") vs expenses. Deduplicates against existing transactions. Auto-suggests categories from history. Review and edit in an editable table before confirming.
 - **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
@@ -350,6 +350,9 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | GET | `/api/debts/payoff-plan?strategy=avalanche\|snowball` | Payoff timeline with estimated debt-free date per strategy |
 | POST | `/api/debts/allocate` | Paycheck allocation in priority order. Body: `{ paycheck_amount, pay_date }`. Returns waterfall with shortfall warnings |
 | GET | `/api/debts/insights` | Smart tips: debt-to-income ratio, advance cycle cost, housing risk alerts |
+| GET | `/api/debts/match-creditor?description=...` | Match expense description to active debt creditor for auto-linking payments |
+| GET | `/api/debts/simulate?extra_monthly=X&strategy=Y` | "What if" payoff simulation with extra monthly payment |
+| GET | `/api/debts/upcoming-due?days=7` | Debts with due dates in the next N days, sorted by urgency |
 | GET | `/api/debts/{id}` | Single debt with payment history |
 | POST | `/api/debts` | Create debt (auto-assigns priority from type) |
 | PUT | `/api/debts/{id}` | Update debt (balance, status, priority, etc.) |
@@ -396,15 +399,15 @@ All errors return a consistent envelope:
 
 | Route | Page | Description |
 |-------|------|-------------|
-| `/` | Dashboard | Summary cards, spending alerts, monthly insights, quick add form, monthly trend chart, spending donut, month-over-month comparison, budget health bars, recent transactions, upcoming bills |
+| `/` | Dashboard | Summary cards, spending alerts, monthly insights, quick add form, monthly trend chart, spending donut, month-over-month comparison, budget health bars, recent transactions, upcoming bills, paycheck arrival prompt for debt allocation, debt due date alerts |
 | `/transactions` | Transactions | Filterable, searchable, paginated transaction list with add/edit/delete |
-| `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector, auto-categorize suggestions, duplicate detection warnings |
+| `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector, auto-categorize suggestions, duplicate detection warnings, debt creditor matching with one-click payment logging |
 | `/transactions/{id}/edit` | Edit Transaction | Same form pre-populated with existing data |
 | `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward, Smart Setup Wizard (income detection + framework selection + auto-allocation), Budget Summary Bar, income change alert with one-click rebalance, auto-budget for new months |
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
 | `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
-| `/debts` | Debts | Summary cards (total owed, minimums, DTI ratio), paycheck planner with waterfall visualization, priority-ordered debt cards with payments, payoff strategy (avalanche/snowball) with debt-free date |
+| `/debts` | Debts | Summary cards (total owed, minimums, DTI ratio), paycheck planner with waterfall visualization, priority-ordered debt cards with payments, payoff strategy (avalanche/snowball) with debt-free date, "What if" simulator with slider, auto-allocate from URL param |
 | `/import` | Import | Tabbed: CSV import (4-step wizard for bank statement CSVs) and Screenshot/OCR import (3-step wizard for photos of receipts, bank screenshots, credit card statements) |
 | `/settings` | Settings | Tabbed: Categories, Recurring Templates (with Quick Setup Wizard), Tags, Data Export |
 
@@ -454,6 +457,16 @@ Both calculate month-by-month simulation with interest, showing estimated payoff
 - "Paying $X extra/month saves $Y in interest"
 - Housing priority alerts when rent is unpaid
 - Advance cycle cost estimation
+
+### Interactive Features
+
+**Debt-Aware Transactions:** When you add an expense and the description matches an active debt creditor (e.g., "T-Mobile" matches your T-Mobile overdue bill), the system prompts: "Log as debt payment too?" One click reduces the debt balance automatically.
+
+**"What If" Simulator:** Interactive slider ($0-$500 extra/month in $25 steps) with live updates showing new debt-free date, months saved, and total interest saved. Quick-set buttons (+$25/+$50/+$100/+$200). Suggests specific subscriptions to cut from your recurring templates (e.g., "Cutting Netflix + Spotify = $27/mo → debt-free 3 months sooner").
+
+**Paycheck Arrival Prompt:** When a large income transaction is detected in the last 3 days and you have active debts, the dashboard prompts: "You received $2,600. Allocate this paycheck to your debts?" One click opens the paycheck planner pre-filled with the amount.
+
+**Debt Due Date Alerts:** Debts with upcoming due dates appear on the dashboard, color-coded by urgency (red = today/tomorrow, yellow = 2-3 days, gray = 4-7 days). High-balance priority-1 debts show a "CRITICAL" badge.
 
 ## Smart Setup Wizards
 
