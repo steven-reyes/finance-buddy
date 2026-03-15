@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Copy, X, Wand2, ChevronRight, ChevronLeft, Check, Info } from 'lucide-react';
+import { Plus, Copy, X, Wand2, ChevronRight, ChevronLeft, Check, Info, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useBudgets, useCreateBudget, useDeleteBudget, useCopyForward, useDetectIncome, useBulkCreateBudgets } from '../hooks/useBudgets';
 import { useCategories } from '../hooks/useCategories';
 import { formatCents, getCurrentMonth, toCents, toDollars } from '../lib/format';
@@ -219,8 +219,12 @@ function BudgetWizard({ month, categories, onClose }: {
 
     await bulkCreate.mutateAsync({ month, budgets: budgetItems });
 
-    // Store income and savings in localStorage
+    // Store income, savings, and framework in localStorage for rebalancing
     localStorage.setItem('fb_monthly_income', String(toCents(income)));
+    localStorage.setItem('fb_budget_framework', frameworkId);
+    localStorage.setItem('fb_budget_needs_pct', String(framework.needs));
+    localStorage.setItem('fb_budget_wants_pct', String(framework.wants));
+    localStorage.setItem('fb_budget_savings_pct', String(framework.savings));
     if (savingsAmount > 0) {
       localStorage.setItem('fb_savings_target', String(toCents(savingsAmount)));
     }
@@ -555,12 +559,97 @@ export default function Budgets() {
   const [month, setMonth] = useState(getCurrentMonth());
   const [showForm, setShowForm] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const [rebalanceDismissed, setRebalanceDismissed] = useState(false);
+  const [autoCreating, setAutoCreating] = useState(false);
 
   const { data: budgets, isLoading, error } = useBudgets(month);
   const { data: categories } = useCategories('expense');
+  const { data: detectedIncome } = useDetectIncome();
   const createBudget = useCreateBudget();
   const deleteBudget = useDeleteBudget();
   const copyForward = useCopyForward();
+  const bulkCreate = useBulkCreateBudgets();
+
+  // --- Income change detection ---
+  const storedIncome = parseInt(localStorage.getItem('fb_monthly_income') || '0', 10);
+  const currentIncome = detectedIncome?.detected_income || 0;
+  const incomeChanged = storedIncome > 0 && currentIncome > 0 &&
+    Math.abs(currentIncome - storedIncome) / storedIncome > 0.05; // >5% change
+  const incomeIncreased = currentIncome > storedIncome;
+
+  // --- Rebalance: scale all budgets proportionally to new income ---
+  const handleRebalance = async () => {
+    if (!budgets || budgets.length === 0 || !categories) return;
+    const ratio = currentIncome / storedIncome;
+
+    const rebalanced = budgets.map((b: any) => ({
+      category_id: b.category_id,
+      limit_amount: Math.round((b.limit_amount || b.amount) * ratio),
+      warn_threshold: b.warn_threshold || 80,
+    }));
+
+    await bulkCreate.mutateAsync({ month, budgets: rebalanced });
+    localStorage.setItem('fb_monthly_income', String(currentIncome));
+    setRebalanceDismissed(true);
+  };
+
+  // --- Auto-create budgets for new months using stored framework ---
+  useEffect(() => {
+    if (isLoading || autoCreating) return;
+    if (budgets && budgets.length > 0) return; // already has budgets
+    if (!categories || categories.length === 0) return;
+
+    const storedFramework = localStorage.getItem('fb_budget_framework');
+    const savedIncome = parseInt(localStorage.getItem('fb_monthly_income') || '0', 10);
+    if (!storedFramework || !savedIncome) return; // no prior setup
+
+    const needsPct = parseInt(localStorage.getItem('fb_budget_needs_pct') || '50', 10);
+    const wantsPct = parseInt(localStorage.getItem('fb_budget_wants_pct') || '30', 10);
+
+    // Rebuild allocations from stored framework
+    const needsPool = Math.round(savedIncome * needsPct / 100);
+    const wantsPool = Math.round(savedIncome * wantsPct / 100);
+
+    const budgetItems: { category_id: number; limit_amount: number; warn_threshold: number }[] = [];
+
+    for (const cat of categories) {
+      const match = matchCategoryTier(cat.name);
+      if (match.tier === 'needs') {
+        budgetItems.push({
+          category_id: cat.id,
+          limit_amount: Math.round(needsPool * match.pct / 100),
+          warn_threshold: 80,
+        });
+      } else if (match.tier === 'wants') {
+        budgetItems.push({
+          category_id: cat.id,
+          limit_amount: Math.round(wantsPool * match.pct / 100),
+          warn_threshold: 80,
+        });
+      }
+    }
+
+    // Add unmatched expense categories to wants with even split
+    const matchedIds = new Set(budgetItems.map(b => b.category_id));
+    const unmatched = categories.filter(c => !matchedIds.has(c.id));
+    if (unmatched.length > 0) {
+      const remaining = wantsPool - budgetItems.filter(b => {
+        const cat = categories.find(c => c.id === b.category_id);
+        return cat && matchCategoryTier(cat.name).tier === 'wants';
+      }).reduce((s, b) => s + b.limit_amount, 0);
+      const perCat = Math.max(0, Math.round(remaining / unmatched.length));
+      for (const cat of unmatched) {
+        if (perCat > 0) {
+          budgetItems.push({ category_id: cat.id, limit_amount: perCat, warn_threshold: 80 });
+        }
+      }
+    }
+
+    if (budgetItems.length > 0) {
+      setAutoCreating(true);
+      bulkCreate.mutateAsync({ month, budgets: budgetItems }).finally(() => setAutoCreating(false));
+    }
+  }, [budgets, isLoading, categories, month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     register,
@@ -641,6 +730,45 @@ export default function Budgets() {
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-center gap-2 text-sm text-blue-300">
           <Info size={16} />
           <span>Savings target: <span className="font-medium">{formatCents(savingsTargetAmount)}</span>/month. Track this separately in your savings goals.</span>
+        </div>
+      )}
+
+      {/* Income Change Alert */}
+      {incomeChanged && !rebalanceDismissed && budgets && budgets.length > 0 && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-yellow-200 font-medium text-sm">
+              Your income has {incomeIncreased ? 'increased' : 'decreased'}: {formatCents(storedIncome)} → {formatCents(currentIncome)}
+            </p>
+            <p className="text-yellow-300/70 text-xs mt-1">
+              Your budgets were set based on {formatCents(storedIncome)}/month. Rebalancing will scale all budget amounts proportionally to your new income.
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={handleRebalance}
+                disabled={bulkCreate.isPending}
+                className="flex items-center gap-1.5 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              >
+                <RefreshCw size={14} className={bulkCreate.isPending ? 'animate-spin' : ''} />
+                {bulkCreate.isPending ? 'Rebalancing...' : 'Rebalance Budgets'}
+              </button>
+              <button
+                onClick={() => setRebalanceDismissed(true)}
+                className="text-xs text-gray-400 hover:text-gray-200 px-3 py-1.5 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-creating indicator */}
+      {autoCreating && (
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-center gap-2 text-sm text-blue-300">
+          <RefreshCw size={16} className="animate-spin" />
+          Auto-creating budgets for {month} based on your saved framework...
         </div>
       )}
 
