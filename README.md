@@ -6,10 +6,10 @@ A personal finance management web application that helps you track income, expen
 
 - **Dashboard** - At-a-glance view of net income, spending by category (donut chart), monthly income vs expense trends (bar chart), budget health, and recent transactions. Month picker for historical viewing.
 - **Transaction Management** - Full CRUD for income and expense entries. Filter by type, category, date range, and search text. Paginated list view with color-coded amounts.
-- **Budget Tracking** - Set monthly spending limits per category. Visual progress bars turn green/yellow/red as you approach and exceed limits. Copy budgets forward month-to-month.
+- **Budget Tracking** - Set monthly spending limits per category. Visual progress bars turn green/yellow/red as you approach and exceed limits. Copy budgets forward month-to-month. **Smart Budget Wizard** auto-detects your income (from recurring templates or transaction history) and allocates budgets using proven frameworks (50/30/20, 70/20/10, 60/20/20, or custom percentages). Categories are pre-sorted into Needs/Wants/Savings tiers with editable amounts. Budget Summary Bar shows income vs budgeted vs remaining at a glance.
 - **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
-- **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are.
-- **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load.
+- **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
+- **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load. **Quick Setup Wizard** guides you through common income sources (salary, freelance) and expenses (rent, utilities, insurance, subscriptions like Netflix/Spotify with pre-filled prices) in a 3-step checklist flow. Shows net income summary before creating all templates at once.
 - **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
 - **Screenshot/OCR Import** - Upload photos of receipts, bank statements, or banking app screenshots. Tesseract OCR extracts text with image preprocessing (auto-rotate, contrast enhancement, dark mode inversion, upscaling). Smart parsing detects document type (receipt vs statement), filters totals/subtotals/tax/balance lines, handles round dollar amounts ($12, $1,200), signed amounts (-$82.40, +$2,600), and parenthesized negatives (82.40). Auto-detects income (deposits, "paid you") vs expenses. Deduplicates against existing transactions. Auto-suggests categories from history. Review and edit in an editable table before confirming.
 - **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
@@ -269,6 +269,7 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | POST | `/api/budgets` | Create budget |
 | PUT | `/api/budgets/{id}` | Update limit or threshold |
 | DELETE | `/api/budgets/{id}` | Delete |
+| POST | `/api/budgets/bulk` | Bulk create budgets for a month (used by Smart Budget Wizard). Body: `{ month, budgets: [{ category_id, limit_amount }] }` |
 | POST | `/api/budgets/copy-forward` | Auto-detect most recent month with budgets and copy to `{ target_month }` |
 
 #### Investments
@@ -310,6 +311,7 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | PUT | `/api/recurring/{id}` | Update template |
 | DELETE | `/api/recurring/{id}` | Delete (generated transactions remain) |
 | POST | `/api/recurring/generate` | Manually trigger generation |
+| POST | `/api/recurring/bulk` | Bulk create templates (used by Quick Setup Wizard). Body: `{ templates: [{ type, amount, description, category_id, frequency, start_date }] }` |
 
 #### Dashboard
 | Method | Path | Description |
@@ -318,6 +320,9 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | GET | `/api/dashboard/spending-by-category?month=YYYY-MM` | Expense breakdown with percentages |
 | GET | `/api/dashboard/monthly-trends?months=6` | Last N months income vs expenses |
 | GET | `/api/dashboard/budget-health?month=YYYY-MM` | Budget progress with status |
+| GET | `/api/dashboard/detect-income` | Auto-detect monthly income from recurring templates (monthly/biweekly/weekly/yearly) or average of last 3 months of income transactions |
+| GET | `/api/dashboard/month-comparison?month=YYYY-MM` | Per-category spending comparison vs previous month with change amounts and percentages |
+| GET | `/api/dashboard/insights?month=YYYY-MM` | Auto-generated insights: net status, category spending changes, budget tracking, savings goal progress |
 
 #### CSV Import
 | Method | Path | Description |
@@ -368,12 +373,48 @@ All errors return a consistent envelope:
 | `/transactions` | Transactions | Filterable, searchable, paginated transaction list with add/edit/delete |
 | `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector |
 | `/transactions/{id}/edit` | Edit Transaction | Same form pre-populated with existing data |
-| `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward |
+| `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward, Smart Setup Wizard (income detection + framework selection + auto-allocation), Budget Summary Bar |
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
 | `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
 | `/import` | Import | Tabbed: CSV import (4-step wizard for bank statement CSVs) and Screenshot/OCR import (3-step wizard for photos of receipts, bank screenshots, credit card statements) |
-| `/settings` | Settings | Tabbed: Categories, Recurring Templates, Tags, Data Export |
+| `/settings` | Settings | Tabbed: Categories, Recurring Templates (with Quick Setup Wizard), Tags, Data Export |
+
+## Smart Setup Wizards
+
+Finance Buddy includes guided setup wizards that do the thinking for you. They work together as a pipeline:
+
+**Recurring Quick Setup** → sets up income/expenses → **Budget Smart Setup** → auto-allocates from income → **Dashboard** → tracks actual vs budget
+
+### Recurring Transactions Quick Setup (Settings > Recurring)
+
+3-step wizard for common recurring income and expenses:
+
+1. **Income** — Toggle on sources: Salary (monthly/biweekly), Freelance, Interest/Dividends. Enter amounts.
+2. **Expenses** — Checklist of 16 common bills in 4 sections:
+   - Housing & Utilities: Rent/Mortgage, Electric, Water, Gas, Internet, Phone
+   - Insurance: Health, Car, Home/Renter's
+   - Transportation: Car Payment, Gas/Fuel, Transit Pass
+   - Subscriptions: Netflix ($15.99), Spotify ($10.99), Gym, Cloud Storage
+3. **Review** — Monthly income vs expenses summary with net indicator. One-click "Create All Templates".
+
+### Budget Smart Setup (Budgets page)
+
+3-step wizard that auto-generates monthly budgets from detected income:
+
+1. **Income Detection** — Auto-detects from recurring templates (monthly, biweekly, weekly, yearly frequencies) or averages last 3 months of income transactions. Manual override available.
+2. **Framework Selection** — Choose a budgeting methodology:
+   - 50/30/20 (Recommended): 50% Needs, 30% Wants, 20% Savings
+   - 70/20/10 (Conservative): 70% Needs, 20% Savings, 10% Wants
+   - 60/20/20 (Balanced): 60% Needs, 20% Wants, 20% Savings
+   - Custom: Set your own percentages
+3. **Review & Adjust** — Categories pre-allocated into tiers:
+   - **Needs**: Rent/Mortgage (60%), Groceries (20%), Utilities (10%), Transportation (10%)
+   - **Wants**: Dining Out, Entertainment, Subscriptions, Clothing, Personal Care
+   - **Savings**: Target amount shown separately
+   - All amounts editable. Running total vs income (green if under, red if over).
+
+Budget Summary Bar shows Monthly Income, Total Budgeted, Remaining, and Savings Target at a glance.
 
 ## Screenshot/OCR Import Pipeline
 
