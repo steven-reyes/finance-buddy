@@ -18,7 +18,7 @@ except Exception:
 TOTAL_KEYWORDS = re.compile(
     r'\b(subtotal|sub\s*total|total|grand\s*total|balance|available\s*balance|amount\s*due|'
     r'tax|sales\s*tax|hst|gst|vat|tip|gratuity|change|cash|credit|debit|'
-    r'visa|mastercard|amex|paid|tendered|discount|you\s*saved|'
+    r'visa|mastercard|amex|tendered|discount|you\s*saved|'
     r'checking|savings\s*account|statement|recent\s*transactions|pending)\b',
     re.IGNORECASE
 )
@@ -26,9 +26,19 @@ TOTAL_KEYWORDS = re.compile(
 # Keywords that indicate income (not expense)
 INCOME_KEYWORDS = re.compile(
     r'\b(deposit|direct\s*deposit|payroll|salary|transfer\s*in|refund|'
-    r'cashback|cash\s*back|reimbursement|payment\s*received|credit)\b',
+    r'cashback|cash\s*back|reimbursement|payment\s*received|'
+    r'paid\s*you|sent\s*you|received)\b',
     re.IGNORECASE
 )
+
+# Keywords indicating a payment TO a credit card (income-like in CC context)
+CC_PAYMENT_KEYWORDS = re.compile(
+    r'\b(payment\s*-?\s*thank\s*you|payment\s*received|autopay|auto\s*pay)\b',
+    re.IGNORECASE
+)
+
+# Parenthesized amount pattern: (82.40) or ($82.40)
+PAREN_AMOUNT_PATTERN = re.compile(r'\((\$?\s*\d{1,3}(?:,\d{3})*\.\d{2})\)')
 
 # Common merchant/store patterns to extract from receipt headers
 MERCHANT_STOP_WORDS = re.compile(
@@ -37,8 +47,10 @@ MERCHANT_STOP_WORDS = re.compile(
 )
 
 # Amount pattern: captures optional +/- sign before $ and the amount
-# Matches: -$82.40, +$2,600.00, $12.99, 12.99, - $82.40
-AMOUNT_PATTERN = re.compile(r'([+\-])?\s*\$?\s*(\d{1,3}(?:,\d{3})*\.\d{2})')
+# Matches: -$82.40, +$2,600.00, $12.99, 12.99, $12, $1,200, - $82.40
+# Group 1: sign (+/-), Group 2: amount with decimals, Group 3: amount without decimals
+# We use alternation: try decimal first, then whole dollar (must have $)
+AMOUNT_PATTERN = re.compile(r'([+\-])?\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\b|([+\-])?\s*(\d{1,3}(?:,\d{3})*\.\d{2})\b')
 
 # Date patterns (with year)
 DATE_PATTERNS_WITH_YEAR = [
@@ -67,8 +79,46 @@ def check_tesseract() -> bool:
         return False
 
 
+def _preprocess_image(img: Image.Image) -> Image.Image:
+    """Preprocess image for better OCR accuracy."""
+    from PIL import ImageEnhance, ImageOps
+
+    # Auto-rotate based on EXIF data (phone photos)
+    try:
+        img = ImageOps.exif_transpose(img)
+    except Exception:
+        pass
+
+    # Convert to grayscale
+    img = img.convert('L')
+
+    # Increase contrast
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(1.5)
+
+    # Increase sharpness
+    enhancer = ImageEnhance.Sharpness(img)
+    img = enhancer.enhance(2.0)
+
+    # If image is dark (dark mode screenshot), invert it
+    # Check average pixel brightness
+    import numpy as np
+    pixels = np.array(img)
+    avg_brightness = pixels.mean()
+    if avg_brightness < 128:
+        img = ImageOps.invert(img)
+
+    # Resize if too small (improves OCR on low-res screenshots)
+    width, height = img.size
+    if width < 1000:
+        scale = 1000 / width
+        img = img.resize((int(width * scale), int(height * scale)), Image.LANCZOS)
+
+    return img
+
+
 def extract_text_from_image(image_path: str) -> str:
-    """Run OCR on an image file and return extracted text."""
+    """Run OCR on an image file with preprocessing for better accuracy."""
     if not check_tesseract():
         raise RuntimeError(
             "Tesseract OCR is not installed. Install it: "
@@ -77,7 +127,10 @@ def extract_text_from_image(image_path: str) -> str:
             "Windows: download from https://github.com/UB-Mannheim/tesseract/wiki"
         )
     img = Image.open(image_path)
-    text = pytesseract.image_to_string(img)
+    img = _preprocess_image(img)
+    # Use Tesseract with optimized config for receipts/statements
+    custom_config = r'--oem 3 --psm 6'
+    text = pytesseract.image_to_string(img, config=custom_config)
     return text
 
 
@@ -298,13 +351,28 @@ def parse_amounts(text: str) -> List[dict]:
         if not line:
             continue
 
+        # Check for parenthesized amounts first: (82.40) or ($82.40)
+        paren_match = PAREN_AMOUNT_PATTERN.search(line)
         amount_match = AMOUNT_PATTERN.search(line)
-        if not amount_match:
+
+        if not amount_match and not paren_match:
             continue
 
-        # Parse amount — group(1) is the +/- sign, group(2) is the number
-        sign = amount_match.group(1)  # '+', '-', or None
-        amount_str = amount_match.group(2).replace(',', '')
+        if paren_match and (not amount_match or paren_match.start() <= amount_match.start()):
+            # Parenthesized amount = negative/expense
+            raw = paren_match.group(1).replace('$', '').replace(',', '').strip()
+            sign = '-'
+            amount_str = raw
+        else:
+            # Regular amount — handle the alternation groups
+            # Groups: (1)sign (2)amount-with-$ | (3)sign (4)amount-no-$
+            if amount_match.group(2):
+                sign = amount_match.group(1)
+                amount_str = amount_match.group(2).replace(',', '')
+            else:
+                sign = amount_match.group(3)
+                amount_str = amount_match.group(4).replace(',', '')
+
         try:
             amount_dollars = float(amount_str)
             amount_cents = round(amount_dollars * 100)
@@ -317,14 +385,17 @@ def parse_amounts(text: str) -> List[dict]:
         # Check if this is a total/subtotal/balance line
         is_total = _is_total_line(line)
 
-        # Determine transaction type from sign and keywords
+        # Determine transaction type from sign, keywords, and context
+        # Check keywords first (they have more semantic meaning than sign alone)
         tx_type = "expense"
-        if sign == '+':
+        if CC_PAYMENT_KEYWORDS.search(line):
+            tx_type = "income"  # Payment to CC reduces balance = credit
+        elif INCOME_KEYWORDS.search(line):
+            tx_type = "income"
+        elif sign == '+':
             tx_type = "income"
         elif sign == '-':
             tx_type = "expense"
-        elif INCOME_KEYWORDS.search(line):
-            tx_type = "income"
 
         # Extract description
         description = line
@@ -347,8 +418,9 @@ def parse_amounts(text: str) -> List[dict]:
                 # Remove date from description
                 description = _strip_date_from_line(description)
 
-        # Clean description
-        description = re.sub(r'\s+', ' ', description).strip(' -:.')
+        # Clean description — always strip date fragments
+        description = _strip_date_from_line(description)
+        description = re.sub(r'\s+', ' ', description).strip(' -:./()')
 
         if not description or len(description) < 2:
             if merchant_name and not is_total:
