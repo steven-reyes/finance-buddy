@@ -120,11 +120,43 @@ export default function SavingsGoals() {
           </div>
           <form onSubmit={goalForm.handleSubmit(onCreateGoal)} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
+              <label className="block text-sm text-gray-400 mb-1">Category</label>
+              <select
+                {...goalForm.register('category', {
+                  onChange: (e) => {
+                    const cat = GOAL_CATEGORIES.find(c => c.value === e.target.value);
+                    if (cat && e.target.value !== 'custom') {
+                      const currentName = goalForm.getValues('name');
+                      const isAutoFilled = !currentName || GOAL_CATEGORIES.some(c => c.label === currentName);
+                      if (isAutoFilled) {
+                        goalForm.setValue('name', cat.label);
+                      }
+                    } else if (e.target.value === 'custom') {
+                      const currentName = goalForm.getValues('name');
+                      const isAutoFilled = GOAL_CATEGORIES.some(c => c.label === currentName);
+                      if (isAutoFilled) {
+                        goalForm.setValue('name', '');
+                      }
+                    }
+                  },
+                })}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select category</option>
+                {GOAL_CATEGORIES.map(c => (
+                  <option key={c.value} value={c.value}>{c.icon} {c.label}</option>
+                ))}
+              </select>
+              {goalForm.formState.errors.category && (
+                <p className="text-red-400 text-xs mt-1">{goalForm.formState.errors.category.message}</p>
+              )}
+            </div>
+            <div>
               <label className="block text-sm text-gray-400 mb-1">Name</label>
               <input
                 {...goalForm.register('name')}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g., Emergency Fund"
+                placeholder={goalForm.watch('category') === 'custom' ? 'e.g., My Custom Goal' : 'Auto-filled from category, edit to customize'}
               />
               {goalForm.formState.errors.name && (
                 <p className="text-red-400 text-xs mt-1">{goalForm.formState.errors.name.message}</p>
@@ -142,21 +174,6 @@ export default function SavingsGoals() {
               />
               {goalForm.formState.errors.target_amount && (
                 <p className="text-red-400 text-xs mt-1">{goalForm.formState.errors.target_amount.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Category</label>
-              <select
-                {...goalForm.register('category')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select category</option>
-                {GOAL_CATEGORIES.map(c => (
-                  <option key={c.value} value={c.value}>{c.icon} {c.label}</option>
-                ))}
-              </select>
-              {goalForm.formState.errors.category && (
-                <p className="text-red-400 text-xs mt-1">{goalForm.formState.errors.category.message}</p>
               )}
             </div>
             <div>
