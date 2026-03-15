@@ -531,6 +531,163 @@ try:
 except Exception as e:
     test("Export CSV is valid", False, str(e))
 
+# ─── 16. BUDGET SMART FEATURES ────────────────────────────
+print("\n[16] BUDGET SMART FEATURES")
+
+# Setup: Create recurring income template so detect-income works
+rec_salary = requests.post(f"{BASE}/recurring", json={
+    "type": "income", "amount": 520000, "description": "Test Salary",
+    "category_id": salary_id, "frequency": "monthly", "start_date": "2026-01-01"
+}).json()
+
+# Test detect-income picks up the recurring template
+r = requests.get(f"{BASE}/dashboard/detect-income")
+test("Detect income finds recurring salary", r.status_code == 200 and r.json()["detected_income"] > 0,
+     f"got {r.json()}")
+test("Source is 'recurring'", r.json()["source"] == "recurring", f"got {r.json()['source']}")
+detected = r.json()["detected_income"]
+test("Detected amount matches salary", detected >= 520000,
+     f"got {detected} (expected >= 520000)")
+
+# Test detect-income handles multiple frequencies
+rec_biweekly = requests.post(f"{BASE}/recurring", json={
+    "type": "income", "amount": 100000, "description": "Side Gig",
+    "category_id": salary_id, "frequency": "biweekly", "start_date": "2026-01-01"
+}).json()
+r = requests.get(f"{BASE}/dashboard/detect-income")
+new_detected = r.json()["detected_income"]
+# biweekly 100000 * 2 = 200000 monthly equivalent
+test("Biweekly income adds to monthly total", new_detected >= detected + 200000,
+     f"got {new_detected} (expected >= {detected + 200000})")
+
+# Test bulk budget create with specific amounts
+test_month = "2026-08"
+r = requests.post(f"{BASE}/budgets/bulk", json={
+    "month": test_month,
+    "budgets": [
+        {"category_id": groceries_id, "limit_amount": 50000, "warn_threshold": 80},
+        {"category_id": rent_id, "limit_amount": 150000, "warn_threshold": 90},
+    ]
+})
+test("Bulk create 2 budgets", r.status_code == 201)
+budgets_created = r.json()
+test("2 budgets returned", len(budgets_created) >= 2, f"got {len(budgets_created)}")
+
+# Verify budgets have correct amounts
+r = requests.get(f"{BASE}/budgets", params={"month": test_month})
+month_budgets = r.json()
+groc_budget = next((b for b in month_budgets if b["category_id"] == groceries_id), None)
+rent_budget = next((b for b in month_budgets if b["category_id"] == rent_id), None)
+test("Groceries budget = $500", groc_budget and groc_budget["limit_amount"] == 50000,
+     f"got {groc_budget['limit_amount'] if groc_budget else 'N/A'}")
+test("Rent budget = $1,500", rent_budget and rent_budget["limit_amount"] == 150000,
+     f"got {rent_budget['limit_amount'] if rent_budget else 'N/A'}")
+test("Groceries warn_threshold = 80", groc_budget and groc_budget["warn_threshold"] == 80)
+test("Rent warn_threshold = 90", rent_budget and rent_budget["warn_threshold"] == 90)
+
+# Test bulk create skips duplicates (same category+month)
+r = requests.post(f"{BASE}/budgets/bulk", json={
+    "month": test_month,
+    "budgets": [
+        {"category_id": groceries_id, "limit_amount": 99999},  # duplicate
+        {"category_id": next(c["id"] for c in cats if c["name"] == "Entertainment"), "limit_amount": 30000},  # new
+    ]
+})
+test("Bulk create skips duplicates", r.status_code == 201)
+r = requests.get(f"{BASE}/budgets", params={"month": test_month})
+groc_after = next((b for b in r.json() if b["category_id"] == groceries_id), None)
+test("Duplicate budget not overwritten", groc_after and groc_after["limit_amount"] == 50000,
+     f"got {groc_after['limit_amount'] if groc_after else 'N/A'}")
+ent_id = next(c["id"] for c in cats if c["name"] == "Entertainment")
+ent_budget = next((b for b in r.json() if b["category_id"] == ent_id), None)
+test("New budget created alongside skip", ent_budget and ent_budget["limit_amount"] == 30000,
+     f"got {ent_budget['limit_amount'] if ent_budget else 'N/A'}")
+
+# Test proportional rebalance simulation
+# If income goes from 520000 to 572000 (10% increase), budgets should scale by 1.1x
+original_income = 520000
+new_income = 572000
+ratio = new_income / original_income
+r = requests.get(f"{BASE}/budgets", params={"month": test_month})
+original_budgets = r.json()
+rebalanced = [
+    {"category_id": b["category_id"],
+     "limit_amount": round((b["limit_amount"] or b.get("amount", 0)) * ratio),
+     "warn_threshold": b.get("warn_threshold", 80)}
+    for b in original_budgets
+]
+
+# Delete old budgets and create rebalanced ones
+for b in original_budgets:
+    requests.delete(f"{BASE}/budgets/{b['id']}")
+r = requests.post(f"{BASE}/budgets/bulk", json={"month": test_month, "budgets": rebalanced})
+test("Rebalanced budgets created", r.status_code == 201)
+r = requests.get(f"{BASE}/budgets", params={"month": test_month})
+rebalanced_budgets = r.json()
+groc_rebal = next((b for b in rebalanced_budgets if b["category_id"] == groceries_id), None)
+expected_groc = round(50000 * ratio)
+test("Groceries rebalanced to 110%", groc_rebal and abs(groc_rebal["limit_amount"] - expected_groc) <= 1,
+     f"got {groc_rebal['limit_amount'] if groc_rebal else 'N/A'}, expected ~{expected_groc}")
+rent_rebal = next((b for b in rebalanced_budgets if b["category_id"] == rent_id), None)
+expected_rent = round(150000 * ratio)
+test("Rent rebalanced to 110%", rent_rebal and abs(rent_rebal["limit_amount"] - expected_rent) <= 1,
+     f"got {rent_rebal['limit_amount'] if rent_rebal else 'N/A'}, expected ~{expected_rent}")
+
+# Test copy-forward preserves rebalanced amounts
+r = requests.post(f"{BASE}/budgets/copy-forward", json={"target_month": "2026-09"})
+test("Copy-forward from rebalanced month", r.status_code == 200)
+r = requests.get(f"{BASE}/budgets", params={"month": "2026-09"})
+copied = r.json()
+groc_copied = next((b for b in copied if b["category_id"] == groceries_id), None)
+test("Copied budget has rebalanced amount", groc_copied and abs(groc_copied["limit_amount"] - expected_groc) <= 1,
+     f"got {groc_copied['limit_amount'] if groc_copied else 'N/A'}")
+
+# Test detect-income with deactivated template
+requests.put(f"{BASE}/recurring/{rec_salary['id']}", json={"is_active": 0})
+r = requests.get(f"{BASE}/dashboard/detect-income")
+reduced = r.json()["detected_income"]
+test("Deactivated recurring excluded from income", reduced < detected,
+     f"got {reduced} (should be < {detected})")
+
+# Reactivate for other tests
+requests.put(f"{BASE}/recurring/{rec_salary['id']}", json={"is_active": 1})
+
+# Test detect-income falls back to transaction average when no active recurring income
+# Deactivate our test templates
+requests.put(f"{BASE}/recurring/{rec_salary['id']}", json={"is_active": 0})
+requests.put(f"{BASE}/recurring/{rec_biweekly['id']}", json={"is_active": 0})
+# Also deactivate any other income recurring templates from earlier tests
+all_recurring = requests.get(f"{BASE}/recurring").json()
+deactivated_ids = []
+for tmpl in all_recurring:
+    if tmpl.get("type") == "income" and tmpl.get("is_active"):
+        requests.put(f"{BASE}/recurring/{tmpl['id']}", json={"is_active": 0})
+        deactivated_ids.append(tmpl["id"])
+r = requests.get(f"{BASE}/dashboard/detect-income")
+test("Falls back to transaction average", r.json()["source"] in ("transactions", "none"),
+     f"source={r.json()['source']}, from_recurring={r.json().get('from_recurring')}")
+# Reactivate all
+for tid in deactivated_ids:
+    requests.put(f"{BASE}/recurring/{tid}", json={"is_active": 1})
+
+# Reactivate
+requests.put(f"{BASE}/recurring/{rec_salary['id']}", json={"is_active": 1})
+requests.put(f"{BASE}/recurring/{rec_biweekly['id']}", json={"is_active": 1})
+
+# Test budget with zero income edge case
+r = requests.get(f"{BASE}/budgets", params={"month": "2099-01"})
+test("Future month with no budgets returns empty", r.status_code == 200 and len(r.json()) == 0)
+
+# Cleanup test recurring templates
+requests.delete(f"{BASE}/recurring/{rec_salary['id']}")
+requests.delete(f"{BASE}/recurring/{rec_biweekly['id']}")
+
+# Cleanup test budgets
+for m in [test_month, "2026-09"]:
+    r = requests.get(f"{BASE}/budgets", params={"month": m})
+    for b in r.json():
+        requests.delete(f"{BASE}/budgets/{b['id']}")
+
 # ─── CLEANUP ──────────────────────────────────────────────
 requests.delete(f"{BASE}/investments/{test_inv_id}")
 requests.delete(f"{BASE}/savings-goals/{test_goal_id}")
