@@ -2,6 +2,7 @@
 import requests
 import json
 import sys
+import os
 
 BASE = "http://127.0.0.1:3001/api"
 PASS = 0
@@ -365,6 +366,176 @@ test("Banking: filters balance line", no_balance, f"amounts: {[r['amount'] for r
 stmt = "03/14/2026 Amazon $42.99\n03/14/2026 Amazon $42.99"
 results = parse_amounts(stmt)
 test("Statement: dedup same-day duplicates", len(results) == 1, f"got {len(results)}")
+
+# ─── 14. UNTESTED ENDPOINTS ───────────────────────────────
+print("\n[14] REMAINING ENDPOINTS")
+
+# PUT category
+r = requests.put(f"{BASE}/categories/{groceries_id}", json={"color": "#00FF00"})
+test("Update category color", r.status_code == 200 and r.json()["color"] == "#00FF00")
+
+# GET single investment
+r = requests.post(f"{BASE}/investments", json={
+    "name": "Test IRA", "type": "ira", "current_value": 100000, "contributions": 80000
+})
+test_inv_id = r.json()["id"]
+r = requests.get(f"{BASE}/investments/{test_inv_id}")
+test("GET single investment", r.status_code == 200 and r.json()["name"] == "Test IRA")
+
+# PUT investment details
+r = requests.put(f"{BASE}/investments/{test_inv_id}", json={"name": "Renamed IRA", "institution": "Schwab"})
+test("Update investment details", r.status_code == 200 and r.json()["name"] == "Renamed IRA")
+
+# PUT savings goal
+r = requests.post(f"{BASE}/savings-goals", json={"name": "Test Goal", "target_amount": 500000})
+test_goal_id = r.json()["id"]
+r = requests.put(f"{BASE}/savings-goals/{test_goal_id}", json={"name": "Updated Goal", "target_amount": 600000})
+test("Update savings goal", r.status_code == 200)
+
+# PUT recurring template
+r = requests.post(f"{BASE}/recurring", json={
+    "type": "expense", "amount": 5000, "description": "Test Sub",
+    "category_id": groceries_id, "frequency": "monthly", "start_date": "2026-01-01"
+})
+test_rec_id = r.json()["id"]
+r = requests.put(f"{BASE}/recurring/{test_rec_id}", json={"amount": 6000, "description": "Updated Sub"})
+test("Update recurring template", r.status_code == 200)
+
+# DELETE recurring template
+r = requests.delete(f"{BASE}/recurring/{test_rec_id}")
+test("Delete recurring template", r.status_code == 204)
+
+# POST transactions/bulk
+r = requests.post(f"{BASE}/transactions/bulk", json=[
+    {"type": "expense", "amount": 1000, "date": "2026-03-10", "description": "Bulk 1"},
+    {"type": "expense", "amount": 2000, "date": "2026-03-10", "description": "Bulk 2"},
+    {"type": "income", "amount": 3000, "date": "2026-03-10", "description": "Bulk 3"},
+])
+test("Bulk create transactions", r.status_code == 201, f"got {r.status_code}: {r.text[:200]}")
+
+# CSV upload with a real CSV file
+import io
+csv_content = "date,amount,description\n2026-03-01,42.99,Amazon\n2026-03-02,15.99,Netflix\n"
+files = {"file": ("test.csv", io.BytesIO(csv_content.encode()), "text/csv")}
+r = requests.post(f"{BASE}/csv/upload", files=files)
+test("CSV upload + parse", r.status_code == 200, f"got {r.status_code}: {r.text[:200]}")
+if r.status_code == 200:
+    csv_data = r.json()
+    test("CSV returns headers", "headers" in csv_data, f"keys: {list(csv_data.keys())}")
+    test("CSV returns preview rows", "preview" in csv_data or "rows" in csv_data,
+         f"keys: {list(csv_data.keys())}")
+
+# OCR upload with a test image
+from PIL import Image, ImageDraw
+img = Image.new('RGB', (400, 200), 'white')
+draw = ImageDraw.Draw(img)
+draw.text((50, 20), 'TEST STORE', fill='black')
+draw.text((50, 50), 'Date: 03/14/2026', fill='black')
+draw.text((50, 80), 'Item One       $12.99', fill='black')
+draw.text((50, 110), 'Item Two       $8.50', fill='black')
+draw.text((50, 140), 'TOTAL          $21.49', fill='black')
+import tempfile
+with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+    img.save(tmp.name)
+    tmp_path = tmp.name
+
+with open(tmp_path, 'rb') as f:
+    r = requests.post(f"{BASE}/ocr/upload", files={"file": ("receipt.png", f, "image/png")})
+test("OCR upload + extract", r.status_code == 200, f"got {r.status_code}: {r.text[:200]}")
+if r.status_code == 200:
+    ocr_data = r.json()
+    test("OCR returns transactions", "transactions" in ocr_data)
+    test("OCR returns upload_id", "upload_id" in ocr_data)
+    test("OCR filters totals from receipt", not any(
+        t["description"] == "TOTAL" for t in ocr_data.get("transactions", [])
+    ), f"txns: {[t['description'] for t in ocr_data.get('transactions', [])]}")
+
+    # OCR confirm
+    if ocr_data.get("transactions"):
+        r = requests.post(f"{BASE}/ocr/confirm", json={
+            "upload_id": ocr_data["upload_id"],
+            "transactions": [
+                {"type": "expense", "amount": t["amount"], "date": t["date"], "description": t["description"]}
+                for t in ocr_data["transactions"]
+            ]
+        })
+        test("OCR confirm + import", r.status_code == 200, f"got {r.status_code}: {r.text[:200]}")
+
+os.unlink(tmp_path)
+
+# ─── 15. EDGE CASES ──────────────────────────────────────
+print("\n[15] EDGE CASES")
+
+# Recurring: biweekly frequency generation
+r = requests.post(f"{BASE}/recurring", json={
+    "type": "income", "amount": 200000, "description": "Biweekly Pay",
+    "category_id": salary_id, "frequency": "biweekly", "start_date": "2026-01-05"
+})
+bw_id = r.json()["id"]
+r = requests.post(f"{BASE}/recurring/generate")
+test("Biweekly generation runs", r.status_code == 200)
+
+# Recurring: deactivated template should be skipped
+r = requests.put(f"{BASE}/recurring/{bw_id}", json={"is_active": 0})
+# Get count before
+r1 = requests.get(f"{BASE}/transactions", params={"limit": 1})
+count_before = r1.json()["total"]
+r = requests.post(f"{BASE}/recurring/generate")
+r2 = requests.get(f"{BASE}/transactions", params={"limit": 1})
+count_after = r2.json()["total"]
+test("Deactivated template not generated", count_after == count_before,
+     f"before={count_before}, after={count_after}")
+
+# Tag appears on transaction GET
+r = requests.post(f"{BASE}/tags", json={"name": "verify-tag"})
+vtag_id = r.json()["id"]
+requests.post(f"{BASE}/transactions/{tx_id}/tags", json=[vtag_id])
+r = requests.get(f"{BASE}/transactions/{tx_id}")
+tx_data = r.json()
+has_tags = "tags" in tx_data and any(t.get("id") == vtag_id or t.get("name") == "verify-tag"
+    for t in (tx_data["tags"] if isinstance(tx_data.get("tags"), list) else []))
+test("Tags appear on transaction GET", has_tags, f"tags: {tx_data.get('tags')}")
+
+# Savings goal current_amount updates after contribution
+r = requests.post(f"{BASE}/savings-goals", json={"name": "Verify Goal", "target_amount": 100000})
+vgoal_id = r.json()["id"]
+requests.post(f"{BASE}/savings-goals/{vgoal_id}/contributions", json={
+    "amount": 25000, "date": "2026-03-14"
+})
+requests.post(f"{BASE}/savings-goals/{vgoal_id}/contributions", json={
+    "amount": 15000, "date": "2026-03-15"
+})
+r = requests.get(f"{BASE}/savings-goals")
+vgoal = next((g for g in r.json() if g["id"] == vgoal_id), None)
+test("Goal current_amount sums contributions", vgoal and vgoal["current_amount"] == 40000,
+     f"got {vgoal['current_amount'] if vgoal else 'N/A'}")
+
+# Copy-forward creates correct budget values
+requests.post(f"{BASE}/budgets", json={"category_id": groceries_id, "month": "2026-06", "limit_amount": 75000, "warn_threshold": 90})
+requests.post(f"{BASE}/budgets/copy-forward", json={"target_month": "2026-07"})
+r = requests.get(f"{BASE}/budgets", params={"month": "2026-07"})
+copied = [b for b in r.json() if b["category_id"] == groceries_id]
+test("Copy-forward preserves limit", len(copied) > 0 and copied[0]["limit_amount"] == 75000,
+     f"got {copied[0]['limit_amount'] if copied else 'N/A'}")
+test("Copy-forward preserves threshold", len(copied) > 0 and copied[0]["warn_threshold"] == 90,
+     f"got {copied[0].get('warn_threshold') if copied else 'N/A'}")
+
+# Export CSV is parseable
+import csv
+r = requests.get(f"{BASE}/export/transactions", params={"format": "csv"})
+try:
+    reader = csv.reader(r.text.strip().split('\n'))
+    headers = next(reader)
+    rows = list(reader)
+    test("Export CSV is valid", len(headers) > 0 and len(rows) > 0, f"headers={headers}")
+except Exception as e:
+    test("Export CSV is valid", False, str(e))
+
+# ─── CLEANUP ──────────────────────────────────────────────
+requests.delete(f"{BASE}/investments/{test_inv_id}")
+requests.delete(f"{BASE}/savings-goals/{test_goal_id}")
+requests.delete(f"{BASE}/savings-goals/{vgoal_id}")
+requests.delete(f"{BASE}/tags/{vtag_id}")
 
 # ─── RESULTS ──────────────────────────────────────────────
 print("\n" + "=" * 60)
