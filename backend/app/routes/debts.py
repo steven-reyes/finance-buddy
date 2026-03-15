@@ -52,6 +52,21 @@ def get_debt_insights():
     return debt_service.get_debt_insights()
 
 
+@router.get("/balance-history")
+def get_balance_history():
+    return debt_service.get_balance_history()
+
+
+@router.get("/progress")
+def get_progress():
+    return debt_service.get_progress()
+
+
+@router.get("/report")
+def get_debt_report():
+    return debt_service.generate_report()
+
+
 # --- List / Create ---
 
 @router.get("")

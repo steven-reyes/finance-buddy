@@ -341,12 +341,20 @@ def get_payoff_plan(strategy: str = "avalanche", extra_monthly: int = 0) -> dict
         total_months = max((payoff_month[d["id"]] or max_months) for d in debts) if debts else 0
         grand_total_interest = sum(total_interest.values())
 
+        # Compute debt-free date
+        debt_free_date = None
+        if total_months > 0 and total_months < max_months:
+            df_year = today.year + (today.month + total_months - 1) // 12
+            df_month = (today.month + total_months - 1) % 12 + 1
+            debt_free_date = f"{df_year}-{df_month:02d}"
+
         return {
             "strategy": strategy,
             "extra_monthly": extra_monthly,
             "debts": result_debts,
             "total_months": total_months,
             "total_interest": grand_total_interest,
+            "debt_free_date": debt_free_date,
         }
     finally:
         conn.close()
@@ -723,6 +731,117 @@ def get_upcoming_due(days: int = 7) -> list:
         return results
     finally:
         conn.close()
+
+
+def get_balance_history() -> list:
+    """Get total debt balance over time from payment records."""
+    conn = get_connection()
+    try:
+        # Get all debts with their original amounts and creation dates
+        debts = conn.execute("SELECT id, original_amount, created_at FROM debts").fetchall()
+
+        # Get all payments ordered by date
+        payments = conn.execute(
+            "SELECT debt_id, amount, date FROM debt_payments ORDER BY date ASC"
+        ).fetchall()
+
+        if not debts:
+            return []
+
+        # Calculate starting total
+        total_original = sum(d["original_amount"] for d in debts)
+
+        # Build timeline: start point + each payment reduces total
+        from collections import defaultdict
+        daily_payments: dict = defaultdict(int)
+        for p in payments:
+            daily_payments[p["date"]] += p["amount"]
+
+        # Also include start date
+        earliest = min(d["created_at"][:10] for d in debts)
+
+        history = [{"date": earliest, "total_balance": total_original}]
+        running = total_original
+
+        for dt in sorted(daily_payments.keys()):
+            running -= daily_payments[dt]
+            history.append({"date": dt, "total_balance": max(0, running)})
+
+        # Add today if last entry isn't today
+        today = datetime.now().strftime("%Y-%m-%d")
+        if history[-1]["date"] != today:
+            # Get actual current total
+            current = conn.execute(
+                "SELECT COALESCE(SUM(current_balance), 0) as total FROM debts WHERE status = 'active'"
+            ).fetchone()["total"]
+            history.append({"date": today, "total_balance": current})
+
+        return history
+    finally:
+        conn.close()
+
+
+def get_progress() -> dict:
+    """Get debt payoff progress metrics."""
+    conn = get_connection()
+    try:
+        total_debts = conn.execute("SELECT COUNT(*) as c FROM debts").fetchone()["c"]
+        paid_off = conn.execute("SELECT COUNT(*) as c FROM debts WHERE status = 'paid_off'").fetchone()["c"]
+        active = conn.execute("SELECT COUNT(*) as c FROM debts WHERE status = 'active'").fetchone()["c"]
+
+        total_original = conn.execute(
+            "SELECT COALESCE(SUM(original_amount), 0) as t FROM debts"
+        ).fetchone()["t"]
+        total_current = conn.execute(
+            "SELECT COALESCE(SUM(current_balance), 0) as t FROM debts WHERE status = 'active'"
+        ).fetchone()["t"]
+        total_paid = total_original - total_current
+
+        # Recent payment (last paid-off debt for celebration)
+        recently_paid = conn.execute(
+            "SELECT name, creditor FROM debts WHERE status = 'paid_off' "
+            "ORDER BY updated_at DESC LIMIT 1"
+        ).fetchone()
+
+        # Debt-free countdown
+        plan = get_payoff_plan(strategy="avalanche")
+        months_remaining = plan.get("total_months", 0)
+        debt_free_date = plan.get("debt_free_date", None)
+
+        return {
+            "total_debts": total_debts,
+            "paid_off_count": paid_off,
+            "active_count": active,
+            "total_original": total_original,
+            "total_current": total_current,
+            "total_paid": total_paid,
+            "paid_percentage": round(total_paid / total_original * 100, 1) if total_original > 0 else 0,
+            "recently_paid_off": dict(recently_paid) if recently_paid else None,
+            "months_remaining": months_remaining,
+            "debt_free_date": debt_free_date,
+        }
+    finally:
+        conn.close()
+
+
+def generate_report() -> dict:
+    """Generate a comprehensive debt report for export/print."""
+    summary = get_summary()
+    progress = get_progress()
+    plan = get_payoff_plan(strategy="avalanche")
+    debts = get_all()
+
+    # Get payment history for each debt
+    for debt in debts:
+        debt["payments"] = get_payments(debt["id"]) or []
+
+    return {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "summary": summary,
+        "progress": progress,
+        "payoff_plan": plan,
+        "debts": debts,
+    }
 
 
 def _months_to_payoff(balance: int, monthly_payment: int, monthly_rate: float) -> int:

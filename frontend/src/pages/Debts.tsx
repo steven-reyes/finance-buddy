@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Trash2, Pencil, DollarSign, AlertTriangle, CreditCard,
   TrendingDown, Calendar, ChevronDown, ChevronUp, X, Loader2, Zap,
+  Download, Printer,
 } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatCents, toCents, formatDate } from '../lib/format';
 import {
   useDebts, useDebtSummary, usePayoffPlan, useCreateDebt, useUpdateDebt,
   useDeleteDebt, useAddDebtPayment, useDebtPayments, useAllocatePaycheck,
-  useSimulatePayoff,
+  useSimulatePayoff, useDebtBalanceHistory, useDebtProgress, useDebtReport,
 } from '../hooks/useDebts';
 import { useRecurring } from '../hooks/useRecurring';
 import { useDetectIncome } from '../hooks/useBudgets';
@@ -587,6 +589,158 @@ function WhatIfSimulator() {
   );
 }
 
+// ─── Progress Banner & Countdown (Features 2 & 3) ───────────────────
+function ProgressBanner() {
+  const { data: progress, isLoading } = useDebtProgress();
+
+  if (isLoading || !progress) return null;
+  if (progress.total_debts === 0) return null;
+
+  const isDebtFree = progress.active_count === 0 && progress.paid_off_count > 0;
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+      {/* Celebration banner */}
+      {progress.recently_paid_off && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+          <div className="text-2xl mb-1">&#127881;</div>
+          <div className="text-lg font-bold text-green-400">
+            {progress.recently_paid_off.name} is PAID OFF!
+          </div>
+          <div className="text-sm text-green-300/70">
+            Keep up the momentum!
+          </div>
+        </div>
+      )}
+
+      {/* Debt-free celebration or countdown (Feature 3) */}
+      {isDebtFree ? (
+        <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-lg p-6 text-center">
+          <div className="text-3xl mb-2">&#127881;</div>
+          <div className="text-2xl font-bold text-green-400">You're debt-free!</div>
+          <div className="text-sm text-green-300/70 mt-1">Congratulations on paying off all your debts!</div>
+        </div>
+      ) : progress.months_remaining > 0 && progress.debt_free_date ? (
+        <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-5 text-center">
+          <div className="text-2xl mb-1">&#127919;</div>
+          <div className="text-2xl font-bold text-blue-400">
+            {progress.months_remaining} month{progress.months_remaining !== 1 ? 's' : ''} until debt-free
+          </div>
+          <div className="text-sm text-gray-400 mt-1">
+            Estimated: {formatDate(progress.debt_free_date)}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Progress bar */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-300">
+            {progress.paid_percentage}% paid off
+          </span>
+          <span className="text-sm text-gray-500">
+            {formatCents(progress.total_paid)} of {formatCents(progress.total_original)}
+          </span>
+        </div>
+        <div className="h-4 bg-gray-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all duration-500"
+            style={{ width: `${Math.min(100, progress.paid_percentage)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex flex-wrap gap-4 text-sm">
+        <div className="text-gray-400">
+          <span className="text-gray-100 font-semibold">{progress.paid_off_count}</span> of{' '}
+          <span className="text-gray-100 font-semibold">{progress.total_debts}</span> debts paid off
+        </div>
+        <div className="text-gray-400">
+          <span className="text-green-400 font-semibold">{formatCents(progress.total_paid)}</span> paid so far
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Debt Balance Over Time Chart (Feature 1) ───────────────────────
+function DebtBalanceChart() {
+  const { data: history, isLoading } = useDebtBalanceHistory();
+
+  if (isLoading) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="text-center py-8"><Loader2 size={24} className="animate-spin mx-auto text-gray-500" /></div>
+      </div>
+    );
+  }
+
+  if (!history || history.length < 2) return null;
+
+  const chartData = history.map(h => ({
+    date: h.date,
+    balance: h.total_balance / 100,
+  }));
+
+  const startAmount = chartData[0]?.balance ?? 0;
+  const currentAmount = chartData[chartData.length - 1]?.balance ?? 0;
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      <h2 className="text-lg font-semibold text-gray-100 mb-1 flex items-center gap-2">
+        <TrendingDown size={20} className="text-red-400" />
+        Debt Progress
+      </h2>
+      <div className="flex items-center gap-4 text-sm text-gray-400 mb-4">
+        <span>Start: <span className="text-red-400 font-medium">${startAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></span>
+        <span>Now: <span className="text-green-400 font-medium">${currentAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></span>
+        {startAmount > currentAmount && (
+          <span className="text-green-400">
+            (-${(startAmount - currentAmount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })})
+          </span>
+        )}
+      </div>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+            <defs>
+              <linearGradient id="debtGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <XAxis
+              dataKey="date"
+              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tickLine={false}
+              axisLine={{ stroke: '#374151' }}
+            />
+            <YAxis
+              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tickLine={false}
+              axisLine={{ stroke: '#374151' }}
+              tickFormatter={(v: number) => `$${v.toLocaleString()}`}
+            />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem' }}
+              labelStyle={{ color: '#9ca3af' }}
+              formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Balance']}
+            />
+            <Area
+              type="monotone"
+              dataKey="balance"
+              stroke="#ef4444"
+              strokeWidth={2}
+              fill="url(#debtGradient)"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 // ─── Debt Card ───────────────────────────────────────────────────────
 function DebtCard({
   debt,
@@ -693,6 +847,8 @@ export default function Debts() {
   const deleteDebt = useDeleteDebt();
   const allocateFromUrl = useAllocatePaycheck();
 
+  const reportMut = useDebtReport();
+
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const [paymentDebt, setPaymentDebt] = useState<{ id: number; name: string } | null>(null);
@@ -765,20 +921,153 @@ export default function Debts() {
     });
   };
 
+  const handleExportPrint = useCallback(() => {
+    reportMut.mutate(undefined, {
+      onSuccess: (report: Record<string, unknown>) => {
+        const r = report as {
+          generated_at: string;
+          summary: { total_owed: number; total_minimum_monthly: number; monthly_interest_cost: number; total_debts: number };
+          progress: { total_original: number; total_paid: number; paid_percentage: number; months_remaining: number; debt_free_date: string | null; paid_off_count: number; active_count: number; total_debts: number };
+          payoff_plan: { strategy: string; total_months: number; total_interest: number; debt_free_date: string | null; debts: Array<{ name: string; current_balance: number; interest_rate: number; estimated_payoff_date: string; months_to_payoff: number; total_interest: number }> };
+          debts: Array<{ name: string; creditor: string; type: string; original_amount: number; current_balance: number; minimum_payment: number; interest_rate: number; priority: number; status: string; total_paid: number; payments: Array<{ amount: number; date: string; note: string | null }> }>;
+        };
+        const fc = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const debtRows = r.debts.map(d => `
+          <tr>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.name}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.creditor}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.status}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${fc(d.original_amount)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${fc(d.current_balance)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${fc(d.total_paid)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${d.interest_rate}%</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${d.priority}</td>
+          </tr>`).join('');
+        const planRows = r.payoff_plan.debts.map(d => `
+          <tr>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.name}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${fc(d.current_balance)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${d.interest_rate}%</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${d.months_to_payoff} mo</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.estimated_payoff_date}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${fc(d.total_interest)}</td>
+          </tr>`).join('');
+
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Finance Buddy - Debt Report</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 20px; color: #111827; background: #fff; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h2 { font-size: 18px; margin-top: 32px; margin-bottom: 12px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; }
+  .subtitle { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+  .stat-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-value.red { color: #ef4444; }
+  .stat-value.green { color: #16a34a; }
+  .stat-value.blue { color: #2563eb; }
+  .progress-bar { height: 20px; background: #e5e7eb; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+  .progress-fill { height: 100%; background: linear-gradient(to right, #22c55e, #10b981); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f9fafb; text-align: left; padding: 10px 8px; border-bottom: 2px solid #e5e7eb; font-weight: 600; font-size: 12px; color: #374151; }
+  @media print { body { padding: 20px; } }
+</style></head><body>
+<h1>Finance Buddy &mdash; Debt Report</h1>
+<div class="subtitle">Generated: ${r.generated_at}</div>
+
+<h2>Summary</h2>
+<div class="stats">
+  <div class="stat"><div class="stat-label">Total Owed</div><div class="stat-value red">${fc(r.summary.total_owed)}</div></div>
+  <div class="stat"><div class="stat-label">Total Paid</div><div class="stat-value green">${fc(r.progress.total_paid)}</div></div>
+  <div class="stat"><div class="stat-label">Progress</div><div class="stat-value blue">${r.progress.paid_percentage}%</div></div>
+  <div class="stat"><div class="stat-label">Debts Paid Off</div><div class="stat-value">${r.progress.paid_off_count} of ${r.progress.total_debts}</div></div>
+</div>
+<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, r.progress.paid_percentage)}%"></div></div>
+<div style="text-align:center;font-size:13px;color:#6b7280;margin-bottom:24px;">${fc(r.progress.total_paid)} paid of ${fc(r.progress.total_original)} total</div>
+
+${r.progress.months_remaining > 0 && r.progress.debt_free_date ? `
+<div style="text-align:center;padding:20px;border:2px solid #2563eb;border-radius:12px;margin-bottom:24px;">
+  <div style="font-size:14px;color:#6b7280;">Estimated Debt-Free Date</div>
+  <div style="font-size:28px;font-weight:700;color:#2563eb;">${r.progress.debt_free_date}</div>
+  <div style="font-size:13px;color:#6b7280;">${r.progress.months_remaining} months remaining</div>
+</div>` : r.progress.active_count === 0 ? `
+<div style="text-align:center;padding:20px;border:2px solid #16a34a;border-radius:12px;margin-bottom:24px;">
+  <div style="font-size:28px;font-weight:700;color:#16a34a;">You're Debt-Free!</div>
+</div>` : ''}
+
+<h2>All Debts</h2>
+<table>
+  <thead><tr><th>Name</th><th>Creditor</th><th>Status</th><th style="text-align:right;">Original</th><th style="text-align:right;">Balance</th><th style="text-align:right;">Paid</th><th style="text-align:right;">Rate</th><th style="text-align:center;">Priority</th></tr></thead>
+  <tbody>${debtRows}</tbody>
+</table>
+
+<h2>Payoff Plan (${r.payoff_plan.strategy})</h2>
+<div style="font-size:13px;color:#6b7280;margin-bottom:12px;">Total: ${r.payoff_plan.total_months} months | ${fc(r.payoff_plan.total_interest)} total interest</div>
+<table>
+  <thead><tr><th>Debt</th><th style="text-align:right;">Balance</th><th style="text-align:right;">Rate</th><th style="text-align:center;">Payoff In</th><th>Payoff Date</th><th style="text-align:right;">Interest</th></tr></thead>
+  <tbody>${planRows}</tbody>
+</table>
+
+<script>window.onload = function() { window.print(); }</script>
+</body></html>`;
+
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+        }
+      },
+    });
+  }, [reportMut]);
+
+  const handleDownloadJson = useCallback(() => {
+    reportMut.mutate(undefined, {
+      onSuccess: (report: Record<string, unknown>) => {
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `debt-report-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+    });
+  }, [reportMut]);
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
           <CreditCard size={24} className="text-red-400" />
           Debt Tracker
         </h1>
-        <button
-          onClick={() => { setShowAddForm(true); setEditingDebt(null); }}
-          className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2"
-        >
-          <Plus size={16} /> Add Debt
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportPrint}
+            disabled={reportMut.isPending}
+            className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors flex items-center gap-1.5"
+            title="Print Report"
+          >
+            {reportMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+            Export Report
+          </button>
+          <button
+            onClick={handleDownloadJson}
+            disabled={reportMut.isPending}
+            className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors flex items-center gap-1.5"
+            title="Download JSON"
+          >
+            <Download size={14} />
+            JSON
+          </button>
+          <button
+            onClick={() => { setShowAddForm(true); setEditingDebt(null); }}
+            className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2"
+          >
+            <Plus size={16} /> Add Debt
+          </button>
+        </div>
       </div>
 
       {/* Error Banner */}
@@ -788,6 +1077,9 @@ export default function Debts() {
           <button onClick={() => setMutationError('')} className="text-red-400 hover:text-red-300"><X size={16} /></button>
         </div>
       )}
+
+      {/* Progress Banner (Feature 2 & 3) */}
+      <ProgressBanner />
 
       {/* Summary Cards */}
       {summary && (
@@ -819,6 +1111,9 @@ export default function Debts() {
           )}
         </div>
       )}
+
+      {/* Debt Balance Over Time Chart (Feature 1) */}
+      <DebtBalanceChart />
 
       {/* Add Debt Form */}
       {showAddForm && (

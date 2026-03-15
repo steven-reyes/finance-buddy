@@ -152,6 +152,46 @@ export function useUpcomingDebtDue(days: number = 7) {
   });
 }
 
+export function useDebtBalanceHistory() {
+  return useQuery({
+    queryKey: ['debts', 'balance-history'],
+    queryFn: async () => {
+      const { data } = await api.get('/debts/balance-history');
+      return data as Array<{ date: string; total_balance: number }>;
+    },
+  });
+}
+
+export function useDebtProgress() {
+  return useQuery({
+    queryKey: ['debts', 'progress'],
+    queryFn: async () => {
+      const { data } = await api.get('/debts/progress');
+      return data as {
+        total_debts: number;
+        paid_off_count: number;
+        active_count: number;
+        total_original: number;
+        total_current: number;
+        total_paid: number;
+        paid_percentage: number;
+        recently_paid_off: { name: string; creditor: string } | null;
+        months_remaining: number;
+        debt_free_date: string | null;
+      };
+    },
+  });
+}
+
+export function useDebtReport() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.get('/debts/report');
+      return data;
+    },
+  });
+}
+
 export function useAllocatePaycheck() {
   return useMutation<PaycheckAllocation, Error, { paycheck_amount: number }>({
     mutationFn: async (body) => {
