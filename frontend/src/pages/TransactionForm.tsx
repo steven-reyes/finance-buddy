@@ -1,0 +1,206 @@
+import { useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useTransaction, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
+import { useCategories } from '../hooks/useCategories';
+import { toCents, toDollars } from '../lib/format';
+
+const schema = z.object({
+  type: z.enum(['income', 'expense']),
+  amount: z.number().positive('Amount must be positive'),
+  description: z.string().min(1, 'Description is required'),
+  date: z.string().min(1, 'Date is required'),
+  category_id: z.number().nullable().optional(),
+  notes: z.string().optional(),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+export default function TransactionForm() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const isEditing = !!id;
+
+  const { data: existing, isLoading: loadingExisting } = useTransaction(
+    isEditing ? Number(id) : undefined
+  );
+
+  const createTransaction = useCreateTransaction();
+  const updateTransaction = useUpdateTransaction();
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      type: 'expense',
+      amount: 0,
+      description: '',
+      date: new Date().toISOString().split('T')[0],
+      category_id: null,
+      notes: '',
+    },
+  });
+
+  const selectedType = watch('type');
+  const { data: categories } = useCategories(selectedType);
+
+  useEffect(() => {
+    if (existing && isEditing) {
+      reset({
+        type: existing.type,
+        amount: toDollars(existing.amount),
+        description: existing.description,
+        date: existing.date,
+        category_id: existing.category_id,
+        notes: existing.notes || '',
+      });
+    }
+  }, [existing, isEditing, reset]);
+
+  const onSubmit = async (values: FormValues) => {
+    const payload = {
+      ...values,
+      amount: toCents(values.amount),
+      category_id: values.category_id || null,
+    };
+
+    if (isEditing) {
+      await updateTransaction.mutateAsync({ id: Number(id), ...payload });
+    } else {
+      await createTransaction.mutateAsync(payload);
+    }
+    navigate('/transactions');
+  };
+
+  if (isEditing && loadingExisting) {
+    return <div className="p-6 text-gray-400">Loading transaction...</div>;
+  }
+
+  return (
+    <div className="p-6 max-w-2xl">
+      <h1 className="text-2xl font-bold mb-6">
+        {isEditing ? 'Edit Transaction' : 'New Transaction'}
+      </h1>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        {/* Type Toggle */}
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-2">Type</label>
+          <div className="flex gap-2">
+            {(['income', 'expense'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  setValue('type', t);
+                  setValue('category_id', null);
+                }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium capitalize transition-colors ${
+                  selectedType === t
+                    ? t === 'income'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-red-600 text-white'
+                    : 'bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Amount */}
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-2">Amount ($)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            {...register('amount', { valueAsNumber: true })}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="0.00"
+          />
+          {errors.amount && <p className="text-red-400 text-sm mt-1">{errors.amount.message}</p>}
+        </div>
+
+        {/* Category */}
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-2">Category</label>
+          <select
+            {...register('category_id', {
+              setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
+            })}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Select category</option>
+            {categories?.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date */}
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-2">Date</label>
+          <input
+            type="date"
+            {...register('date')}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {errors.date && <p className="text-red-400 text-sm mt-1">{errors.date.message}</p>}
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-2">Description</label>
+          <input
+            type="text"
+            {...register('description')}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="What was this for?"
+          />
+          {errors.description && (
+            <p className="text-red-400 text-sm mt-1">{errors.description.message}</p>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-2">Notes (optional)</label>
+          <textarea
+            {...register('notes')}
+            rows={3}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            placeholder="Any additional notes..."
+          />
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3 pt-2">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            {isSubmitting ? 'Saving...' : isEditing ? 'Update' : 'Create'}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/transactions')}
+            className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-6 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
