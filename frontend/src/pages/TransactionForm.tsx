@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useTransaction, useCreateTransaction, useUpdateTransaction } from '../hooks/useTransactions';
+import { Sparkles } from 'lucide-react';
+import { useTransaction, useCreateTransaction, useUpdateTransaction, useSuggestCategory } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
 import { useTags } from '../hooks/useTags';
 import { toCents, toDollars } from '../lib/format';
@@ -32,6 +33,8 @@ export default function TransactionForm() {
   const updateTransaction = useUpdateTransaction();
   const { data: tags } = useTags();
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [debouncedDescription, setDebouncedDescription] = useState('');
+  const [manualCategorySelected, setManualCategorySelected] = useState(false);
 
   const {
     register,
@@ -53,7 +56,19 @@ export default function TransactionForm() {
   });
 
   const selectedType = watch('type');
+  const watchedDescription = watch('description');
+  const watchedCategoryId = watch('category_id');
   const { data: categories } = useCategories(selectedType);
+
+  // Debounce description for auto-categorize
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedDescription(watchedDescription || '');
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [watchedDescription]);
+
+  const { data: suggestion } = useSuggestCategory(debouncedDescription);
 
   useEffect(() => {
     if (existing && isEditing) {
@@ -109,6 +124,7 @@ export default function TransactionForm() {
                 onClick={() => {
                   setValue('type', t);
                   setValue('category_id', null);
+                  setManualCategorySelected(false);
                 }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-medium capitalize transition-colors ${
                   selectedType === t
@@ -144,6 +160,7 @@ export default function TransactionForm() {
           <select
             {...register('category_id', {
               setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
+              onChange: () => setManualCategorySelected(true),
             })}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
@@ -152,6 +169,25 @@ export default function TransactionForm() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          {/* Feature 5: Auto-Categorize suggestion */}
+          {suggestion && !manualCategorySelected && !watchedCategoryId && (
+            <div className="flex items-center gap-2 mt-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+              <Sparkles size={14} className="text-blue-400 shrink-0" />
+              <span className="text-sm text-blue-300">
+                Suggested: {suggestion.category_icon} {suggestion.category_name}
+                {suggestion.match_count > 0 && ` (based on ${suggestion.match_count} similar transactions)`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setValue('category_id', suggestion.category_id);
+                }}
+                className="ml-auto text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md transition-colors shrink-0"
+              >
+                Apply
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tags */}

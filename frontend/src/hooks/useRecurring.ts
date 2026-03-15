@@ -83,6 +83,26 @@ export function useBulkCreateRecurring() {
   });
 }
 
+export function useUpcomingBills(days: number = 7) {
+  return useQuery({
+    queryKey: ['recurring', 'upcoming', days],
+    queryFn: async () => {
+      const { data } = await api.get('/recurring/upcoming', { params: { days } });
+      return data as Array<{
+        id: number;
+        description: string;
+        amount: number;
+        type: string;
+        frequency: string;
+        category_name: string;
+        category_icon: string;
+        due_date: string;
+        days_until: number;
+      }>;
+    },
+  });
+}
+
 export function useGenerateRecurring() {
   const qc = useQueryClient();
   return useMutation({

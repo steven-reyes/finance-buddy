@@ -185,6 +185,151 @@ def detect_monthly_income() -> dict:
         conn.close()
 
 
+def _format_dollars(cents: int) -> str:
+    """Format cents as a dollar string like $1,360."""
+    negative = cents < 0
+    cents = abs(cents)
+    dollars = cents // 100
+    formatted = f"${dollars:,}"
+    if negative:
+        formatted = f"-{formatted}"
+    return formatted
+
+
+def _pct_change(current: int, previous: int) -> float | None:
+    """Return percentage change from previous to current, or None if previous is 0."""
+    if previous == 0:
+        return None
+    return round((current - previous) / previous * 100, 1)
+
+
+def get_monthly_insights(month: str) -> dict:
+    from datetime import datetime, timedelta
+    conn = get_connection()
+    try:
+        insights = []
+
+        # Parse current and previous month
+        dt = datetime.strptime(month + "-01", "%Y-%m-%d")
+        prev_dt = dt - timedelta(days=1)
+        prev_month = prev_dt.strftime("%Y-%m")
+
+        # --- Total income/expenses for current and previous month ---
+        row = conn.execute(
+            "SELECT "
+            "COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income, "
+            "COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses "
+            "FROM transactions WHERE strftime('%Y-%m', date) = ?",
+            (month,),
+        ).fetchone()
+        income = row["income"]
+        expenses = row["expenses"]
+        net = income - expenses
+
+        prev_row = conn.execute(
+            "SELECT "
+            "COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income, "
+            "COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses "
+            "FROM transactions WHERE strftime('%Y-%m', date) = ?",
+            (prev_month,),
+        ).fetchone()
+        prev_income = prev_row["income"]
+        prev_expenses = prev_row["expenses"]
+
+        # Net income insight
+        if net >= 0:
+            insights.append({"type": "positive", "message": f"You're net positive by {_format_dollars(net)} this month"})
+        else:
+            insights.append({"type": "negative", "message": f"Warning: spending exceeds income by {_format_dollars(abs(net))}"})
+
+        # Total expenses comparison
+        exp_pct = _pct_change(expenses, prev_expenses)
+        if exp_pct is not None:
+            direction = "up" if exp_pct > 0 else "down"
+            itype = "warning" if exp_pct > 0 else "positive"
+            insights.append({"type": itype, "message": f"Total expenses {direction} {abs(exp_pct)}% from last month"})
+
+        # Total income comparison
+        inc_pct = _pct_change(income, prev_income)
+        if inc_pct is not None:
+            direction = "up" if inc_pct > 0 else "down"
+            itype = "positive" if inc_pct > 0 else "warning"
+            insights.append({"type": itype, "message": f"Total income {direction} {abs(inc_pct)}% from last month"})
+
+        # --- Category-level spending comparison ---
+        cat_rows = conn.execute(
+            "SELECT c.name, COALESCE(SUM(t.amount), 0) as amount "
+            "FROM transactions t JOIN categories c ON t.category_id = c.id "
+            "WHERE t.type = 'expense' AND strftime('%Y-%m', t.date) = ? "
+            "GROUP BY c.id ORDER BY amount DESC",
+            (month,),
+        ).fetchall()
+
+        prev_cat_rows = conn.execute(
+            "SELECT c.name, COALESCE(SUM(t.amount), 0) as amount "
+            "FROM transactions t JOIN categories c ON t.category_id = c.id "
+            "WHERE t.type = 'expense' AND strftime('%Y-%m', t.date) = ? "
+            "GROUP BY c.id",
+            (prev_month,),
+        ).fetchall()
+        prev_cat_map = {r["name"]: r["amount"] for r in prev_cat_rows}
+
+        # Biggest expense category
+        if cat_rows and expenses > 0:
+            top = cat_rows[0]
+            top_pct = round(top["amount"] / expenses * 100)
+            insights.append({"type": "info", "message": f"{top['name']} is your largest expense at {top_pct}% of spending"})
+
+        # Per-category changes
+        for cat in cat_rows:
+            prev_amt = prev_cat_map.get(cat["name"])
+            if prev_amt and prev_amt > 0:
+                pct = _pct_change(cat["amount"], prev_amt)
+                if pct is not None and abs(pct) >= 10:
+                    direction = "up" if pct > 0 else "down"
+                    itype = "warning" if pct > 0 else "positive"
+                    insights.append({
+                        "type": itype,
+                        "message": f"{cat['name']} spending {direction} {abs(pct)}% vs last month ({_format_dollars(prev_amt)} \u2192 {_format_dollars(cat['amount'])})",
+                    })
+
+        # --- Budget status ---
+        budgets = conn.execute(
+            "SELECT b.*, c.name as category_name FROM budgets b "
+            "JOIN categories c ON b.category_id = c.id WHERE b.month = ?",
+            (month,),
+        ).fetchall()
+
+        if budgets:
+            on_track = 0
+            total_budgets = len(budgets)
+            for b in budgets:
+                spent_row = conn.execute(
+                    "SELECT COALESCE(SUM(amount), 0) as total FROM transactions "
+                    "WHERE category_id = ? AND type = 'expense' AND strftime('%Y-%m', date) = ?",
+                    (b["category_id"], month),
+                ).fetchone()
+                spent = spent_row["total"]
+                if spent <= b["limit_amount"]:
+                    on_track += 1
+            insights.append({"type": "info", "message": f"{on_track} of {total_budgets} budgets on track this month"})
+
+        # --- Savings goals progress ---
+        goals = conn.execute(
+            "SELECT name, current_amount, target_amount FROM savings_goals WHERE target_amount > 0"
+        ).fetchall()
+        for g in goals:
+            pct = round(g["current_amount"] / g["target_amount"] * 100)
+            insights.append({
+                "type": "info",
+                "message": f"{g['name']} is {pct}% funded ({_format_dollars(g['current_amount'])} of {_format_dollars(g['target_amount'])})",
+            })
+
+        return {"month": month, "insights": insights}
+    finally:
+        conn.close()
+
+
 def get_budget_health(month: str) -> List[dict]:
     conn = get_connection()
     try:

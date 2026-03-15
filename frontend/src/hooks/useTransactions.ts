@@ -76,6 +76,18 @@ export function useUpdateTransaction() {
   });
 }
 
+export function useSuggestCategory(description: string) {
+  return useQuery({
+    queryKey: ['transactions', 'suggest-category', description],
+    queryFn: async () => {
+      const { data } = await api.get('/transactions/suggest-category', { params: { description } });
+      return data as { category_id: number; category_name: string; category_icon: string; category_color: string; confidence: string; match_count: number } | null;
+    },
+    enabled: description.length >= 3,
+    staleTime: 60000,
+  });
+}
+
 export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({

@@ -25,6 +25,11 @@ def detect_income():
     return dashboard_service.detect_monthly_income()
 
 
+@router.get("/insights")
+def get_monthly_insights(month: str = Query(..., pattern=r'^\d{4}-\d{2}$')):
+    return dashboard_service.get_monthly_insights(month)
+
+
 @router.get("/budget-health")
 def get_budget_health(month: str = Query(..., pattern=r'^\d{4}-\d{2}$')):
     return dashboard_service.get_budget_health(month)

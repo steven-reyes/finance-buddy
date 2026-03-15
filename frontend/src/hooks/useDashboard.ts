@@ -41,3 +41,16 @@ export function useBudgetHealth(month: string) {
     },
   });
 }
+
+export function useMonthlyInsights(month: string) {
+  return useQuery({
+    queryKey: ['dashboard', 'insights', month],
+    queryFn: async () => {
+      const { data } = await api.get('/dashboard/insights', { params: { month } });
+      return data as {
+        month: string;
+        insights: Array<{ type: 'positive' | 'warning' | 'negative' | 'info'; message: string }>;
+      };
+    },
+  });
+}

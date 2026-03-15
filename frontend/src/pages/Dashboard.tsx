@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Plus } from 'lucide-react';
-import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth } from '../hooks/useDashboard';
-import { useTransactions } from '../hooks/useTransactions';
-import { formatCents, formatDate, getCurrentMonth } from '../lib/format';
+import {
+  TrendingUp, TrendingDown, DollarSign, BarChart3, Plus, X,
+  CheckCircle, AlertTriangle, XCircle, Info, Lightbulb, Calendar,
+} from 'lucide-react';
+import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth, useMonthlyInsights } from '../hooks/useDashboard';
+import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useCategories } from '../hooks/useCategories';
+import { useUpcomingBills } from '../hooks/useRecurring';
+import { formatCents, formatDate, getCurrentMonth, toCents } from '../lib/format';
 
 const CHART_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -23,17 +28,104 @@ function deltaPercent(current: number, previous: number): string {
 
 export default function Dashboard() {
   const [month, setMonth] = useState(getCurrentMonth());
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickType, setQuickType] = useState<'income' | 'expense'>('expense');
+  const [quickAmount, setQuickAmount] = useState('');
+  const [quickDescription, setQuickDescription] = useState('');
+  const [quickCategoryId, setQuickCategoryId] = useState<number | null>(null);
 
   const { data: summary, isLoading: loadingSummary } = useDashboardSummary(month);
   const { data: spending, isLoading: loadingSpending } = useSpendingByCategory(month);
   const { data: trends, isLoading: loadingTrends } = useMonthlyTrends(6);
   const { data: budgetHealth, isLoading: loadingBudgets } = useBudgetHealth(month);
   const { data: recentTxns } = useTransactions({ page: 1, per_page: 5 });
+  const { data: insights } = useMonthlyInsights(month);
+  const { data: upcomingBills } = useUpcomingBills(7);
+  const { data: quickCategories } = useCategories(quickType);
+  const createTransaction = useCreateTransaction();
+
+  // Reset dismissed alerts when month changes
+  useEffect(() => {
+    setDismissedAlerts(new Set());
+  }, [month]);
+
+  const handleQuickAdd = async () => {
+    const amt = parseFloat(quickAmount);
+    if (!amt || !quickDescription.trim()) return;
+    await createTransaction.mutateAsync({
+      type: quickType,
+      amount: toCents(amt),
+      description: quickDescription.trim(),
+      date: new Date().toISOString().split('T')[0],
+      category_id: quickCategoryId,
+    });
+    setQuickAmount('');
+    setQuickDescription('');
+    setQuickCategoryId(null);
+    setShowQuickAdd(false);
+  };
+
+  // Spending alerts from budget health
+  const spendingAlerts = (budgetHealth || [])
+    .filter((b) => b.percentage >= b.warn_threshold || b.percentage >= 100)
+    .filter((b) => !dismissedAlerts.has(`${b.id}-${month}`))
+    .map((b) => ({
+      id: `${b.id}-${month}`,
+      status: b.percentage >= 100 ? 'over' as const : 'warning' as const,
+      category: b.category_name,
+      spent: b.spent,
+      limit: b.amount,
+      percentage: b.percentage,
+    }))
+    .slice(0, 3);
 
   return (
     <div className="p-6 space-y-6">
+      {/* Feature 3: Spending Alerts Banner */}
+      {spendingAlerts.length > 0 && (
+        <div className="space-y-2">
+          {spendingAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${
+                alert.status === 'over'
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+              }`}
+            >
+              <span>
+                {alert.status === 'over'
+                  ? `\u{1F6A8} ${alert.category} is over budget! ${formatCents(alert.spent)} spent of ${formatCents(alert.limit)} limit`
+                  : `\u{26A0}\u{FE0F} ${alert.category} is at ${alert.percentage.toFixed(0)}% of budget (${formatCents(alert.spent)} / ${formatCents(alert.limit)})`}
+              </span>
+              <button
+                onClick={() => setDismissedAlerts((prev) => new Set(prev).add(alert.id))}
+                className="ml-3 hover:opacity-70"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          {/* Feature 2: Quick Add toggle button */}
+          <button
+            onClick={() => setShowQuickAdd(!showQuickAdd)}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${
+              showQuickAdd
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200'
+            }`}
+            title="Quick add transaction"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
         <input
           type="month"
           value={month}
@@ -41,6 +133,63 @@ export default function Dashboard() {
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
+
+      {/* Feature 2: Quick Add Transaction Form */}
+      {showQuickAdd && (
+        <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex gap-1">
+              {(['income', 'expense'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setQuickType(t); setQuickCategoryId(null); }}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-colors ${
+                    quickType === t
+                      ? t === 'income' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-400 border border-gray-700'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="Amount"
+              value={quickAmount}
+              onChange={(e) => setQuickAmount(e.target.value)}
+              className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="text"
+              placeholder="Description"
+              value={quickDescription}
+              onChange={(e) => setQuickDescription(e.target.value)}
+              className="flex-1 min-w-[150px] bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <select
+              value={quickCategoryId ?? ''}
+              onChange={(e) => setQuickCategoryId(e.target.value ? Number(e.target.value) : null)}
+              className="w-40 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Category</option>
+              {quickCategories?.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleQuickAdd}
+              disabled={createTransaction.isPending || !quickAmount || !quickDescription.trim()}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              {createTransaction.isPending ? 'Adding...' : 'Add'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       {loadingSummary ? (
@@ -107,6 +256,32 @@ export default function Dashboard() {
           />
         </div>
       ) : null}
+
+      {/* Feature 1: Monthly Insights Widget */}
+      {insights && insights.insights && insights.insights.length > 0 && (
+        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Lightbulb size={20} className="text-yellow-400" />
+            <h2 className="text-lg font-semibold">Monthly Insights</h2>
+          </div>
+          <div className="space-y-2">
+            {insights.insights.slice(0, 5).map((insight, i) => {
+              const config = {
+                positive: { bg: 'bg-green-500/10', text: 'text-green-400', Icon: CheckCircle },
+                warning: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', Icon: AlertTriangle },
+                negative: { bg: 'bg-red-500/10', text: 'text-red-400', Icon: XCircle },
+                info: { bg: 'bg-blue-500/10', text: 'text-blue-400', Icon: Info },
+              }[insight.type];
+              return (
+                <div key={i} className={`flex items-center gap-3 rounded-lg px-4 py-3 ${config.bg}`}>
+                  <config.Icon size={18} className={config.text} />
+                  <span className={`text-sm ${config.text}`}>{insight.message}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Monthly Trends */}
@@ -269,6 +444,48 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Feature 4: Upcoming Bills Widget */}
+      <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar size={20} className="text-blue-400" />
+          <h2 className="text-lg font-semibold">Upcoming Bills (Next 7 Days)</h2>
+        </div>
+        {upcomingBills && upcomingBills.length > 0 ? (
+          <div className="space-y-3">
+            {upcomingBills.map((bill) => {
+              const dueColor =
+                bill.days_until === 0 ? 'text-red-400' : bill.days_until === 1 ? 'text-yellow-400' : 'text-gray-400';
+              const dueLabel =
+                bill.days_until === 0 ? 'Today' : bill.days_until === 1 ? 'Tomorrow' : `in ${bill.days_until} days`;
+              return (
+                <div key={bill.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs">
+                      {bill.category_icon || bill.category_name?.charAt(0) || '?'}
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-200">{bill.description}</p>
+                      <p className={`text-xs ${dueColor}`}>{dueLabel}</p>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-medium ${bill.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                    {bill.type === 'income' ? '+' : '-'}{formatCents(bill.amount)}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="border-t border-gray-800 pt-3 flex justify-between text-sm">
+              <span className="text-gray-400">Total due</span>
+              <span className="text-gray-200 font-medium">
+                {formatCents(upcomingBills.filter(b => b.type === 'expense').reduce((sum, b) => sum + b.amount, 0))}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-gray-500 text-center py-8">No bills due in the next 7 days</div>
+        )}
       </div>
     </div>
   );

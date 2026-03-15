@@ -128,6 +128,65 @@ def bulk_create(templates: list) -> list:
     return results
 
 
+def get_upcoming_bills(days: int = 7) -> List[dict]:
+    """Return recurring templates with next due dates within the specified number of days."""
+    today = date.today()
+    horizon = today + timedelta(days=days)
+    conn = get_connection()
+    try:
+        templates = conn.execute(
+            "SELECT rt.*, c.name as category_name, c.icon as category_icon "
+            "FROM recurring_templates rt "
+            "LEFT JOIN categories c ON rt.category_id = c.id "
+            "WHERE rt.is_active = 1"
+        ).fetchall()
+
+        upcoming = []
+        for tmpl in templates:
+            t = dict(tmpl)
+            start = datetime.strptime(t["start_date"], "%Y-%m-%d").date()
+            end_date = None
+            if t["end_date"]:
+                end_date = datetime.strptime(t["end_date"], "%Y-%m-%d").date()
+                if end_date < today:
+                    continue
+
+            original_day = start.day
+
+            # Determine next occurrence after today
+            if t["last_generated"]:
+                last_gen = datetime.strptime(t["last_generated"], "%Y-%m-%d").date()
+                next_date = _add_frequency(last_gen, t["frequency"], original_day)
+            else:
+                next_date = start
+
+            # Advance until next_date is after today
+            while next_date <= today:
+                next_date = _add_frequency(next_date, t["frequency"], original_day)
+
+            if end_date and next_date > end_date:
+                continue
+
+            if next_date <= horizon:
+                days_until = (next_date - today).days
+                upcoming.append({
+                    "id": t["id"],
+                    "description": t["description"],
+                    "amount": t["amount"],
+                    "type": t["type"],
+                    "frequency": t["frequency"],
+                    "category_name": t.get("category_name"),
+                    "category_icon": t.get("category_icon"),
+                    "due_date": next_date.isoformat(),
+                    "days_until": days_until,
+                })
+
+        upcoming.sort(key=lambda x: x["due_date"])
+        return upcoming
+    finally:
+        conn.close()
+
+
 def generate_due_transactions() -> int:
     """Generate all due recurring transactions up to today. Returns count of generated transactions."""
     today = date.today()

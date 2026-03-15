@@ -36,6 +36,14 @@ def list_transactions(
     return transaction_service.get_all(filters)
 
 
+@router.get("/suggest-category")
+def suggest_category(description: str = Query(..., min_length=1)):
+    result = transaction_service.suggest_category(description)
+    if not result:
+        return {"suggestion": None}
+    return {"suggestion": result}
+
+
 @router.get("/{transaction_id}")
 def get_transaction(transaction_id: int):
     tx = transaction_service.get_by_id(transaction_id)

@@ -179,6 +179,41 @@ def delete(tx_id: int) -> bool:
         conn.close()
 
 
+def suggest_category(description: str) -> dict | None:
+    conn = get_connection()
+    try:
+        # Search for past transactions with similar descriptions
+        # Use LIKE with the first significant word(s)
+        words = description.strip().split()
+        if not words:
+            return None
+
+        # Try exact match first, then first word match
+        for search_term in [description.strip(), words[0]]:
+            row = conn.execute(
+                "SELECT t.category_id, c.name, c.icon, c.color, COUNT(*) as cnt "
+                "FROM transactions t "
+                "JOIN categories c ON t.category_id = c.id "
+                "WHERE t.description LIKE ? "
+                "GROUP BY t.category_id "
+                "ORDER BY cnt DESC LIMIT 1",
+                (f"%{search_term}%",),
+            ).fetchone()
+            if row:
+                return {
+                    "category_id": row["category_id"],
+                    "category_name": row["name"],
+                    "category_icon": row["icon"],
+                    "category_color": row["color"],
+                    "confidence": "high" if search_term == description.strip() else "medium",
+                    "match_count": row["cnt"],
+                }
+
+        return None
+    finally:
+        conn.close()
+
+
 def bulk_create(transactions: List[TransactionCreate], csv_import_id: Optional[int] = None, ocr_upload_id: Optional[int] = None) -> List[dict]:
     conn = get_connection()
     created_ids = []
