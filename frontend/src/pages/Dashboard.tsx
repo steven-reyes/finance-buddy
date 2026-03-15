@@ -10,11 +10,11 @@ import {
   ArrowLeftRight, ArrowUp, ArrowDown, CreditCard,
 } from 'lucide-react';
 import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth, useMonthlyInsights, useMonthComparison } from '../hooks/useDashboard';
-import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
+import { useTransactions } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
 import { useUpcomingBills } from '../hooks/useRecurring';
 import { useDebtSummary, useUpcomingDebtDue } from '../hooks/useDebts';
-import { formatCents, formatDate, getCurrentMonth, toCents } from '../lib/format';
+import { formatCents, formatDate, getCurrentMonth } from '../lib/format';
 
 const CHART_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -32,11 +32,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [month, setMonth] = useState(getCurrentMonth());
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [quickType, setQuickType] = useState<'income' | 'expense'>('expense');
-  const [quickAmount, setQuickAmount] = useState('');
-  const [quickDescription, setQuickDescription] = useState('');
-  const [quickCategoryId, setQuickCategoryId] = useState<number | null>(null);
   const [paycheckDismissed, setPaycheckDismissed] = useState(() => sessionStorage.getItem('paycheck-prompt-dismissed') === 'true');
 
   const { data: summary, isLoading: loadingSummary } = useDashboardSummary(month);
@@ -47,8 +42,6 @@ export default function Dashboard() {
   const { data: insights } = useMonthlyInsights(month);
   const { data: upcomingBills } = useUpcomingBills(7);
   const { data: monthComparison } = useMonthComparison(month);
-  const { data: quickCategories } = useCategories(quickType);
-  const createTransaction = useCreateTransaction();
   const { data: debtSummary } = useDebtSummary();
   const { data: upcomingDebtDue } = useUpcomingDebtDue(7);
 
@@ -74,22 +67,6 @@ export default function Dashboard() {
   useEffect(() => {
     setDismissedAlerts(new Set());
   }, [month]);
-
-  const handleQuickAdd = async () => {
-    const amt = parseFloat(quickAmount);
-    if (!amt || !quickDescription.trim()) return;
-    await createTransaction.mutateAsync({
-      type: quickType,
-      amount: toCents(amt),
-      description: quickDescription.trim(),
-      date: new Date().toISOString().split('T')[0],
-      category_id: quickCategoryId,
-    });
-    setQuickAmount('');
-    setQuickDescription('');
-    setQuickCategoryId(null);
-    setShowQuickAdd(false);
-  };
 
   // Spending alerts from budget health
   const spendingAlerts = (budgetHealth || [])
@@ -138,18 +115,13 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          {/* Feature 2: Quick Add toggle button */}
-          <button
-            onClick={() => setShowQuickAdd(!showQuickAdd)}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${
-              showQuickAdd
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 border border-gray-700 hover:text-gray-200'
-            }`}
-            title="Quick add transaction"
+          <Link
+            to="/transactions/new"
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
           >
-            <Plus size={16} />
-          </button>
+            <Plus size={14} />
+            Add Transaction
+          </Link>
         </div>
         <input
           type="month"
@@ -158,63 +130,6 @@ export default function Dashboard() {
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
-
-      {/* Feature 2: Quick Add Transaction Form */}
-      {showQuickAdd && (
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex gap-1">
-              {(['income', 'expense'] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => { setQuickType(t); setQuickCategoryId(null); }}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-colors ${
-                    quickType === t
-                      ? t === 'income' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-400 border border-gray-700'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              placeholder="Amount"
-              value={quickAmount}
-              onChange={(e) => setQuickAmount(e.target.value)}
-              className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <input
-              type="text"
-              placeholder="Description"
-              value={quickDescription}
-              onChange={(e) => setQuickDescription(e.target.value)}
-              className="flex-1 min-w-[150px] bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <select
-              value={quickCategoryId ?? ''}
-              onChange={(e) => setQuickCategoryId(e.target.value ? Number(e.target.value) : null)}
-              className="w-40 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Category</option>
-              {quickCategories?.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={handleQuickAdd}
-              disabled={createTransaction.isPending || !quickAmount || !quickDescription.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              {createTransaction.isPending ? 'Adding...' : 'Add'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Summary Cards */}
       {loadingSummary ? (
