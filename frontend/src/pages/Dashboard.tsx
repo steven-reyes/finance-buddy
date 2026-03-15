@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -7,12 +7,13 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, BarChart3, Plus, X,
   CheckCircle, AlertTriangle, XCircle, Info, Lightbulb, Calendar,
-  ArrowLeftRight, ArrowUp, ArrowDown,
+  ArrowLeftRight, ArrowUp, ArrowDown, CreditCard,
 } from 'lucide-react';
 import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth, useMonthlyInsights, useMonthComparison } from '../hooks/useDashboard';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
 import { useUpcomingBills } from '../hooks/useRecurring';
+import { useDebtSummary, useUpcomingDebtDue } from '../hooks/useDebts';
 import { formatCents, formatDate, getCurrentMonth, toCents } from '../lib/format';
 
 const CHART_COLORS = [
@@ -28,6 +29,7 @@ function deltaPercent(current: number, previous: number): string {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [month, setMonth] = useState(getCurrentMonth());
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -35,6 +37,7 @@ export default function Dashboard() {
   const [quickAmount, setQuickAmount] = useState('');
   const [quickDescription, setQuickDescription] = useState('');
   const [quickCategoryId, setQuickCategoryId] = useState<number | null>(null);
+  const [paycheckDismissed, setPaycheckDismissed] = useState(() => sessionStorage.getItem('paycheck-prompt-dismissed') === 'true');
 
   const { data: summary, isLoading: loadingSummary } = useDashboardSummary(month);
   const { data: spending, isLoading: loadingSpending } = useSpendingByCategory(month);
@@ -46,6 +49,26 @@ export default function Dashboard() {
   const { data: monthComparison } = useMonthComparison(month);
   const { data: quickCategories } = useCategories(quickType);
   const createTransaction = useCreateTransaction();
+  const { data: debtSummary } = useDebtSummary();
+  const { data: upcomingDebtDue } = useUpcomingDebtDue(7);
+
+  // Feature 3: Detect recent income (last 3 days)
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  const recentIncomeFilter = {
+    type: 'income' as const,
+    start_date: threeDaysAgo.toISOString().split('T')[0],
+    page: 1,
+    per_page: 3,
+  };
+  const { data: recentIncome } = useTransactions(recentIncomeFilter);
+  const latestIncome = recentIncome?.data?.[0];
+  const showPaycheckPrompt = !paycheckDismissed && latestIncome && debtSummary && debtSummary.total_debts > 0;
+
+  const handleDismissPaycheck = () => {
+    setPaycheckDismissed(true);
+    sessionStorage.setItem('paycheck-prompt-dismissed', 'true');
+  };
 
   // Reset dismissed alerts when month changes
   useEffect(() => {
@@ -530,7 +553,78 @@ export default function Dashboard() {
         ) : (
           <div className="text-gray-500 text-center py-8">No bills due in the next 7 days</div>
         )}
+
+        {/* Feature 4: Debt Payments Due */}
+        {upcomingDebtDue && upcomingDebtDue.length > 0 && (
+          <div className="border-t border-gray-800 pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <CreditCard size={16} className="text-red-400" />
+              <h3 className="text-sm font-semibold text-gray-300">Debt Payments Due</h3>
+            </div>
+            <div className="space-y-2">
+              {upcomingDebtDue.map((debt) => {
+                const dueColor =
+                  debt.days_until <= 1 ? 'text-red-400' : debt.days_until <= 3 ? 'text-yellow-400' : 'text-gray-400';
+                const dueLabel =
+                  debt.days_until === 0 ? 'Today' : debt.days_until === 1 ? 'Tomorrow' : `in ${debt.days_until} days`;
+                const isCritical = debt.current_balance > 50000 && debt.priority === 1;
+                return (
+                  <div key={debt.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CreditCard size={14} className={dueColor} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-200">{debt.name}</span>
+                          {isCritical && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-bold">CRITICAL</span>
+                          )}
+                        </div>
+                        <p className={`text-xs ${dueColor}`}>due {dueLabel}</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium text-red-400">{formatCents(debt.current_balance)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Feature 3: Paycheck Arrival Prompt */}
+      {showPaycheckPrompt && latestIncome && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <DollarSign size={20} className="text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm text-blue-300">
+                  You received {latestIncome.description} ({formatCents(latestIncome.amount)}) on {formatDate(latestIncome.date)}. Allocate this paycheck to your debts?
+                </p>
+              </div>
+            </div>
+            <button onClick={handleDismissPaycheck} className="text-gray-400 hover:text-gray-200 ml-3 shrink-0">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="flex gap-3 mt-3 ml-13">
+            <button
+              onClick={() => navigate(`/debts?allocate=${latestIncome.amount}`)}
+              className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
+            >
+              Allocate Now
+            </button>
+            <button
+              onClick={handleDismissPaycheck}
+              className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg transition-colors border border-gray-700"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,6 +29,24 @@ def allocate_paycheck(dto: PaycheckAllocation):
     )
 
 
+@router.get("/match-creditor")
+def match_creditor(description: str = Query(..., min_length=2)):
+    result = debt_service.match_creditor(description)
+    return {"match": result}
+
+
+@router.get("/upcoming-due")
+def get_upcoming_due(days: int = Query(7, ge=1, le=30)):
+    return debt_service.get_upcoming_due(days)
+
+
+@router.get("/simulate")
+def simulate_payoff(extra_monthly: int = Query(0, ge=0), strategy: str = Query("avalanche")):
+    """Simulate payoff with extra monthly payment."""
+    plan = debt_service.get_payoff_plan(strategy=strategy, extra_monthly=extra_monthly)
+    return plan
+
+
 @router.get("/insights")
 def get_debt_insights():
     return debt_service.get_debt_insights()

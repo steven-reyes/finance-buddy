@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Sparkles, AlertTriangle } from 'lucide-react';
+import { Sparkles, AlertTriangle, CreditCard, Check } from 'lucide-react';
 import { useTransaction, useCreateTransaction, useUpdateTransaction, useSuggestCategory, useCheckDuplicates } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
 import { useTags } from '../hooks/useTags';
+import { useAddDebtPayment } from '../hooks/useDebts';
 import { toCents, toDollars, formatCents } from '../lib/format';
 
 const schema = z.object({
@@ -35,6 +36,13 @@ export default function TransactionForm() {
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [debouncedDescription, setDebouncedDescription] = useState('');
   const [manualCategorySelected, setManualCategorySelected] = useState(false);
+  const [debtMatchPrompt, setDebtMatchPrompt] = useState<{
+    match: { id: number; name: string; creditor: string; current_balance: number; type: string };
+    amount: number;
+    date: string;
+  } | null>(null);
+  const [debtPaymentLogged, setDebtPaymentLogged] = useState<{ creditor: string; newBalance: number } | null>(null);
+  const addDebtPayment = useAddDebtPayment();
 
   const {
     register,
@@ -105,10 +113,54 @@ export default function TransactionForm() {
 
     if (isEditing) {
       await updateTransaction.mutateAsync({ id: Number(id), ...payload });
+      navigate('/transactions');
     } else {
       await createTransaction.mutateAsync(payload);
+      // Check for debt creditor match on expense transactions
+      if (values.type === 'expense' && values.description.length >= 3) {
+        try {
+          const { data } = await (await import('../lib/api')).default.get('/debts/match-creditor', {
+            params: { description: values.description },
+          });
+          if (data.match) {
+            setDebtMatchPrompt({
+              match: data.match,
+              amount: toCents(values.amount),
+              date: values.date,
+            });
+            return; // Don't navigate yet — show the prompt
+          }
+        } catch {
+          // Silently fail — just navigate
+        }
+      }
+      navigate('/transactions');
     }
-    navigate('/transactions');
+  };
+
+  const handleLogDebtPayment = () => {
+    if (!debtMatchPrompt) return;
+    addDebtPayment.mutate(
+      {
+        debtId: debtMatchPrompt.match.id,
+        amount: debtMatchPrompt.amount,
+        date: debtMatchPrompt.date,
+        note: 'Logged from transaction form',
+      },
+      {
+        onSuccess: (data) => {
+          setDebtPaymentLogged({
+            creditor: debtMatchPrompt.match.creditor,
+            newBalance: data.current_balance,
+          });
+          setDebtMatchPrompt(null);
+          setTimeout(() => navigate('/transactions'), 2000);
+        },
+        onError: () => {
+          navigate('/transactions');
+        },
+      }
+    );
   };
 
   if (isEditing && loadingExisting) {
@@ -301,6 +353,45 @@ export default function TransactionForm() {
           </button>
         </div>
       </form>
+
+      {/* Debt Match Prompt */}
+      {debtMatchPrompt && (
+        <div className="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2 text-blue-300">
+            <CreditCard size={18} />
+            <span className="text-sm font-medium">
+              This looks like a payment to {debtMatchPrompt.match.creditor} ({debtMatchPrompt.match.name}, {formatCents(debtMatchPrompt.match.current_balance)} owed). Log as debt payment too?
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleLogDebtPayment}
+              disabled={addDebtPayment.isPending}
+              className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {addDebtPayment.isPending ? 'Logging...' : 'Yes, log payment'}
+            </button>
+            <button
+              onClick={() => navigate('/transactions')}
+              className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors border border-gray-700"
+            >
+              No thanks
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Debt Payment Confirmation */}
+      {debtPaymentLogged && (
+        <div className="mt-6 bg-green-500/10 border border-green-500/30 rounded-xl p-5">
+          <div className="flex items-center gap-2 text-green-400">
+            <Check size={18} />
+            <span className="text-sm font-medium">
+              Debt payment logged. {debtPaymentLogged.creditor} balance reduced to {formatCents(debtPaymentLogged.newBalance)}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

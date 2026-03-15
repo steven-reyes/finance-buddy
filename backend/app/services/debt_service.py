@@ -655,6 +655,76 @@ def get_debt_insights() -> dict:
         conn.close()
 
 
+def match_creditor(description: str) -> Optional[dict]:
+    """Check if a transaction description matches any active debt creditor."""
+    conn = get_connection()
+    try:
+        debts = conn.execute(
+            "SELECT id, name, creditor, current_balance, type FROM debts WHERE status = 'active'"
+        ).fetchall()
+
+        desc_lower = description.lower()
+        for d in debts:
+            d = dict(d)
+            # Match creditor name or debt name against description
+            if d["creditor"].lower() in desc_lower or d["name"].lower() in desc_lower:
+                return d
+            # Also try first word of creditor
+            first_word = d["creditor"].split()[0].lower() if d["creditor"] else ""
+            if first_word and len(first_word) >= 3 and first_word in desc_lower:
+                return d
+        return None
+    finally:
+        conn.close()
+
+
+def get_upcoming_due(days: int = 7) -> list:
+    """Get debts with due dates in the next N days."""
+    import calendar
+    conn = get_connection()
+    try:
+        today = datetime.now()
+        current_day = today.day
+
+        debts = conn.execute(
+            "SELECT id, name, creditor, current_balance, due_day, priority, type "
+            "FROM debts WHERE status = 'active' AND due_day IS NOT NULL"
+        ).fetchall()
+
+        results = []
+        for d in debts:
+            d = dict(d)
+            due_day = d["due_day"]
+
+            # Calculate next due date
+            year = today.year
+            month = today.month
+            last_day = calendar.monthrange(year, month)[1]
+            actual_due_day = min(due_day, last_day)
+
+            if actual_due_day >= current_day:
+                days_until = actual_due_day - current_day
+                due_year, due_month, due_d = year, month, actual_due_day
+            else:
+                # Next month
+                next_month = month + 1 if month < 12 else 1
+                next_year = year if month < 12 else year + 1
+                next_last = calendar.monthrange(next_year, next_month)[1]
+                next_due = min(due_day, next_last)
+                days_until = (last_day - current_day) + next_due
+                due_year, due_month, due_d = next_year, next_month, next_due
+
+            if days_until <= days:
+                d["days_until"] = days_until
+                d["due_date"] = f"{due_year}-{due_month:02d}-{due_d:02d}"
+                results.append(d)
+
+        results.sort(key=lambda x: x["days_until"])
+        return results
+    finally:
+        conn.close()
+
+
 def _months_to_payoff(balance: int, monthly_payment: int, monthly_rate: float) -> int:
     """Simulate months to payoff given balance, payment, and monthly interest rate."""
     if monthly_payment <= 0:

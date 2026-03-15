@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Trash2, Pencil, DollarSign, AlertTriangle, CreditCard,
-  TrendingDown, Calendar, ChevronDown, ChevronUp, X, Loader2,
+  TrendingDown, Calendar, ChevronDown, ChevronUp, X, Loader2, Zap,
 } from 'lucide-react';
 import { formatCents, toCents, formatDate } from '../lib/format';
 import {
   useDebts, useDebtSummary, usePayoffPlan, useCreateDebt, useUpdateDebt,
   useDeleteDebt, useAddDebtPayment, useDebtPayments, useAllocatePaycheck,
+  useSimulatePayoff,
 } from '../hooks/useDebts';
+import { useRecurring } from '../hooks/useRecurring';
 import { useDetectIncome } from '../hooks/useBudgets';
 import type { Debt, PaycheckAllocation } from '../types/debt';
 
@@ -471,6 +474,119 @@ function PayoffStrategy() {
   );
 }
 
+// ─── What If Simulator ────────────────────────────────────────────────
+function WhatIfSimulator() {
+  const [extraMonthly, setExtraMonthly] = useState(0);
+  const [debouncedExtra, setDebouncedExtra] = useState(0);
+  const [strategy] = useState<'avalanche' | 'snowball'>('avalanche');
+  const { data: recurring } = useRecurring();
+
+  // Debounce slider value
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedExtra(extraMonthly), 300);
+    return () => clearTimeout(timer);
+  }, [extraMonthly]);
+
+  const { data: baseline } = useSimulatePayoff(0, strategy);
+  const { data: simulated } = useSimulatePayoff(debouncedExtra, strategy);
+
+  const monthsSaved = baseline && simulated ? baseline.total_months - simulated.total_months : 0;
+  const interestSaved = baseline && simulated ? baseline.total_interest - simulated.total_interest : 0;
+
+  // Suggest recurring expenses to cut
+  const expenseTemplates = recurring?.filter(r => r.type === 'expense' && r.is_active) || [];
+  const cuttableSubs = expenseTemplates.filter(r =>
+    r.amount <= 5000 && r.amount >= 500 // $5-$50 range - subscription-like
+  ).slice(0, 3);
+  const cuttableTotal = cuttableSubs.reduce((s, r) => s + r.amount, 0);
+
+  const quickAmounts = [2500, 5000, 10000, 20000]; // $25, $50, $100, $200 in cents
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
+        <Zap size={20} className="text-yellow-400" />
+        What If? Simulator
+      </h2>
+
+      {/* Slider */}
+      <div className="space-y-3 mb-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-400">Extra monthly payment</span>
+          <span className="text-lg font-bold text-yellow-400">{formatCents(extraMonthly)}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={50000}
+          step={2500}
+          value={extraMonthly}
+          onChange={e => setExtraMonthly(Number(e.target.value))}
+          className="w-full h-2 bg-gray-700 rounded-full appearance-none cursor-pointer accent-yellow-500"
+        />
+        <div className="flex justify-between text-xs text-gray-600">
+          <span>$0</span>
+          <span>$500</span>
+        </div>
+      </div>
+
+      {/* Quick buttons */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {quickAmounts.map(amt => (
+          <button
+            key={amt}
+            onClick={() => setExtraMonthly(amt)}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors border ${
+              extraMonthly === amt
+                ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300'
+                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            +{formatCents(amt)}
+          </button>
+        ))}
+      </div>
+
+      {/* Results */}
+      {simulated && baseline && debouncedExtra > 0 && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-gray-800 rounded-lg p-3 text-center">
+              <div className="text-xs text-gray-500 mb-1">Debt-free by</div>
+              <div className="text-sm font-bold text-blue-400">
+                {simulated.debt_free_date ? formatDate(simulated.debt_free_date) : `${simulated.total_months} mo`}
+              </div>
+            </div>
+            <div className="bg-green-500/10 rounded-lg p-3 text-center">
+              <div className="text-xs text-gray-500 mb-1">Months Saved</div>
+              <div className="text-sm font-bold text-green-400">{monthsSaved > 0 ? monthsSaved : 0}</div>
+            </div>
+            <div className="bg-green-500/10 rounded-lg p-3 text-center">
+              <div className="text-xs text-gray-500 mb-1">Interest Saved</div>
+              <div className="text-sm font-bold text-green-400">{interestSaved > 0 ? formatCents(interestSaved) : '$0'}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription cut suggestion */}
+      {cuttableSubs.length > 0 && cuttableTotal > 0 && (
+        <div className="mt-4 bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
+          <p className="text-sm text-purple-300">
+            Cutting {cuttableSubs.map(s => `${s.description} (${formatCents(s.amount)})`).join(' + ')} = {formatCents(cuttableTotal)}/month extra
+          </p>
+          <button
+            onClick={() => setExtraMonthly(cuttableTotal)}
+            className="mt-2 text-xs text-purple-400 hover:text-purple-300 underline"
+          >
+            Try this amount
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Debt Card ───────────────────────────────────────────────────────
 function DebtCard({
   debt,
@@ -568,21 +684,43 @@ function DebtCard({
 
 // ─── Main Debts Page ─────────────────────────────────────────────────
 export default function Debts() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: debts, isLoading } = useDebts();
   const { data: summary } = useDebtSummary();
   const { data: incomeData } = useDetectIncome();
   const createDebt = useCreateDebt();
   const updateDebt = useUpdateDebt();
   const deleteDebt = useDeleteDebt();
+  const allocateFromUrl = useAllocatePaycheck();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const [paymentDebt, setPaymentDebt] = useState<{ id: number; name: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Debt | null>(null);
   const [mutationError, setMutationError] = useState('');
-  const [expandedSections, setExpandedSections] = useState({ planner: true, strategy: true });
+  const [expandedSections, setExpandedSections] = useState({ planner: true, strategy: true, whatif: true });
+  const [urlAllocation, setUrlAllocation] = useState<PaycheckAllocation | null>(null);
 
-  const toggleSection = (key: 'planner' | 'strategy') => {
+  // Feature 3: Read ?allocate= URL param and auto-trigger allocation
+  useEffect(() => {
+    const allocateParam = searchParams.get('allocate');
+    if (allocateParam) {
+      const cents = parseInt(allocateParam);
+      if (cents > 0) {
+        allocateFromUrl.mutate(
+          { paycheck_amount: cents },
+          {
+            onSuccess: (data) => setUrlAllocation(data),
+          }
+        );
+        // Clear the URL param
+        searchParams.delete('allocate');
+        setSearchParams(searchParams, { replace: true });
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleSection = (key: 'planner' | 'strategy' | 'whatif') => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -742,6 +880,33 @@ export default function Debts() {
         )}
       </div>
 
+      {/* URL Allocation Result (Feature 3) */}
+      {urlAllocation && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-green-400">
+              <DollarSign size={18} />
+              <span className="font-semibold">Paycheck Allocation: {formatCents(urlAllocation.paycheck_amount)}</span>
+            </div>
+            <button onClick={() => setUrlAllocation(null)} className="text-gray-400 hover:text-gray-200"><X size={16} /></button>
+          </div>
+          <div className="space-y-2">
+            {urlAllocation.allocations.map((a, i) => (
+              <div key={i} className="flex items-center justify-between text-sm">
+                <span className="text-gray-300">{a.name}</span>
+                <span className="text-gray-100 font-medium">{formatCents(a.amount)}</span>
+              </div>
+            ))}
+          </div>
+          {urlAllocation.shortfall > 0 && (
+            <div className="text-sm text-red-400 flex items-center gap-2">
+              <AlertTriangle size={14} />
+              Shortfall: {formatCents(urlAllocation.shortfall)}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Payoff Strategy */}
       <div>
         <button onClick={() => toggleSection('strategy')} className="flex items-center gap-2 text-gray-300 hover:text-gray-100 mb-2 transition-colors">
@@ -749,6 +914,15 @@ export default function Debts() {
           <span className="font-medium">Payoff Strategy</span>
         </button>
         {expandedSections.strategy && <PayoffStrategy />}
+      </div>
+
+      {/* What If Simulator (Feature 2) */}
+      <div>
+        <button onClick={() => toggleSection('whatif')} className="flex items-center gap-2 text-gray-300 hover:text-gray-100 mb-2 transition-colors">
+          {expandedSections.whatif ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <span className="font-medium">What If? Simulator</span>
+        </button>
+        {expandedSections.whatif && <WhatIfSimulator />}
       </div>
 
       {/* Payment Modal */}

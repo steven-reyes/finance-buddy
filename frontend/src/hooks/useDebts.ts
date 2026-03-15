@@ -109,6 +109,49 @@ export function useDebtPayments(id: number | null) {
   });
 }
 
+export function useMatchCreditor(description: string) {
+  return useQuery({
+    queryKey: ['debts', 'match-creditor', description],
+    queryFn: async () => {
+      const { data } = await api.get('/debts/match-creditor', { params: { description } });
+      return data.match as { id: number; name: string; creditor: string; current_balance: number; type: string } | null;
+    },
+    enabled: description.length >= 3,
+    staleTime: 60000,
+  });
+}
+
+export function useSimulatePayoff(extraMonthly: number, strategy: string) {
+  return useQuery<PayoffPlan>({
+    queryKey: ['debts', 'simulate', extraMonthly, strategy],
+    queryFn: async () => {
+      const { data } = await api.get('/debts/simulate', { params: { extra_monthly: extraMonthly, strategy } });
+      return data;
+    },
+    enabled: true,
+  });
+}
+
+export function useUpcomingDebtDue(days: number = 7) {
+  return useQuery({
+    queryKey: ['debts', 'upcoming-due', days],
+    queryFn: async () => {
+      const { data } = await api.get('/debts/upcoming-due', { params: { days } });
+      return data as Array<{
+        id: number;
+        name: string;
+        creditor: string;
+        current_balance: number;
+        due_day: number;
+        priority: number;
+        type: string;
+        days_until: number;
+        due_date: string;
+      }>;
+    },
+  });
+}
+
 export function useAllocatePaycheck() {
   return useMutation<PaycheckAllocation, Error, { paycheck_amount: number }>({
     mutationFn: async (body) => {
