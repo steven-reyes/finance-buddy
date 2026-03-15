@@ -5,7 +5,7 @@ from app.services import investment_service
 router = APIRouter(prefix="/api/investments", tags=["investments"])
 
 
-@router.get("/")
+@router.get("")
 def list_investments():
     return investment_service.get_all()
 
@@ -37,7 +37,7 @@ def get_snapshots(investment_id: int):
     return investment_service.get_snapshots(investment_id)
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_investment(dto: InvestmentCreate):
     return investment_service.create(dto)
 

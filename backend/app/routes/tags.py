@@ -5,12 +5,12 @@ from app.services import tag_service
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
 
-@router.get("/")
+@router.get("")
 def list_tags():
     return tag_service.get_all()
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_tag(dto: TagCreate):
     try:
         return tag_service.create(dto)

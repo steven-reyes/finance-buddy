@@ -5,12 +5,12 @@ from app.services import savings_goal_service
 router = APIRouter(prefix="/api/savings-goals", tags=["savings-goals"])
 
 
-@router.get("/")
+@router.get("")
 def list_goals():
     return savings_goal_service.get_all()
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_goal(dto: SavingsGoalCreate):
     return savings_goal_service.create(dto)
 

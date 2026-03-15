@@ -3,21 +3,73 @@ from app.database import get_connection
 
 
 def get_summary(month: str) -> dict:
+    from datetime import datetime, timedelta
     conn = get_connection()
     try:
+        # Current month
         row = conn.execute(
             "SELECT "
-            "COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income, "
-            "COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expenses, "
+            "COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income, "
+            "COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses, "
             "COUNT(*) as transaction_count "
             "FROM transactions "
             "WHERE strftime('%Y-%m', date) = ?",
             (month,),
         ).fetchone()
-        d = dict(row)
-        d["month"] = month
-        d["net"] = d["total_income"] - d["total_expenses"]
-        return d
+
+        income = row["income"]
+        expenses = row["expenses"]
+        net = income - expenses
+
+        # Previous month
+        dt = datetime.strptime(month + "-01", "%Y-%m-%d")
+        prev_dt = dt - timedelta(days=1)
+        prev_month = prev_dt.strftime("%Y-%m")
+
+        prev_row = conn.execute(
+            "SELECT "
+            "COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income, "
+            "COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expenses "
+            "FROM transactions "
+            "WHERE strftime('%Y-%m', date) = ?",
+            (prev_month,),
+        ).fetchone()
+
+        prev_income = prev_row["income"]
+        prev_expenses = prev_row["expenses"]
+        prev_net = prev_income - prev_expenses
+
+        # Investment totals
+        inv_row = conn.execute(
+            "SELECT COALESCE(SUM(current_value), 0) as total_value "
+            "FROM investments"
+        ).fetchone()
+        investment_value = inv_row["total_value"]
+
+        # Previous investment value (from snapshots closest to prev month end)
+        prev_inv_row = conn.execute(
+            "SELECT COALESCE(SUM(value), 0) as total_value FROM ("
+            "  SELECT investment_id, value FROM investment_snapshots "
+            "  WHERE recorded_at <= ? "
+            "  GROUP BY investment_id "
+            "  HAVING recorded_at = MAX(recorded_at)"
+            ")",
+            (prev_month + "-31",),
+        ).fetchone()
+        prev_investment_value = prev_inv_row["total_value"] if prev_inv_row else 0
+
+        return {
+            "income": income,
+            "expenses": expenses,
+            "net": net,
+            "transaction_count": row["transaction_count"],
+            "month": month,
+            "investment_value": investment_value,
+            "prev_income": prev_income,
+            "prev_expenses": prev_expenses,
+            "prev_net": prev_net,
+            "prev_investment_value": prev_investment_value,
+        }
     finally:
         conn.close()
 
@@ -107,14 +159,17 @@ def get_budget_health(month: str) -> List[dict]:
                 status = "ok"
 
             results.append({
+                "id": bd["id"],
                 "category_id": bd["category_id"],
                 "category_name": bd["category_name"],
                 "category_color": bd["category_color"],
                 "category_icon": bd.get("category_icon"),
+                "amount": limit_amt,
                 "limit_amount": limit_amt,
                 "spent": spent,
                 "remaining": remaining,
                 "percentage": percentage,
+                "warn_threshold": bd["warn_threshold"],
                 "status": status,
             })
 

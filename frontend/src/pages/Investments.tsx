@@ -102,7 +102,7 @@ export default function Investments() {
               <p className={`text-2xl font-bold ${summary.total_gain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {formatCents(summary.total_gain)}{' '}
                 <span className="text-sm font-normal">
-                  ({summary.gain_percentage >= 0 ? '+' : ''}{summary.gain_percentage.toFixed(1)}%)
+                  ({(summary.gain_percentage ?? 0) >= 0 ? '+' : ''}{(summary.gain_percentage ?? 0).toFixed(1)}%)
                 </span>
               </p>
             </div>

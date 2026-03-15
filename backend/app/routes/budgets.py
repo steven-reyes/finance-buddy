@@ -5,12 +5,12 @@ from app.services import budget_service
 router = APIRouter(prefix="/api/budgets", tags=["budgets"])
 
 
-@router.get("/")
+@router.get("")
 def list_budgets(month: str = Query(..., pattern=r'^\d{4}-\d{2}$')):
     return budget_service.get_by_month(month)
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_budget(dto: BudgetCreate):
     try:
         budget = budget_service.create(dto)

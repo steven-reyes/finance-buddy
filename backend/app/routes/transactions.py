@@ -12,7 +12,7 @@ from app.services import transaction_service, tag_service
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 
-@router.get("/")
+@router.get("")
 def list_transactions(
     type: Optional[Literal["income", "expense"]] = None,
     category_id: Optional[int] = None,
@@ -47,7 +47,7 @@ def get_transaction(transaction_id: int):
     return tx
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_transaction(dto: TransactionCreate):
     tx = transaction_service.create(dto)
     return tx

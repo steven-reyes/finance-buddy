@@ -5,12 +5,12 @@ from app.services import recurring_service
 router = APIRouter(prefix="/api/recurring", tags=["recurring"])
 
 
-@router.get("/")
+@router.get("")
 def list_recurring():
     return recurring_service.get_all()
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_recurring(dto: RecurringCreate):
     return recurring_service.create(dto)
 

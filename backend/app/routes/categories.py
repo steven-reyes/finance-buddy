@@ -6,13 +6,13 @@ from app.services import category_service
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
 
-@router.get("/")
+@router.get("")
 def list_categories(type: Optional[str] = Query(None)):
     categories = category_service.get_all(type_filter=type)
     return categories
 
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_category(dto: CategoryCreate):
     try:
         category = category_service.create(dto)
