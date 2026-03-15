@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 
 
 class RecurringCreate(BaseModel):
@@ -20,6 +20,10 @@ class RecurringUpdate(BaseModel):
     frequency: Optional[Literal['weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']] = None
     end_date: Optional[str] = None
     is_active: Optional[int] = None
+
+
+class BulkRecurringCreate(BaseModel):
+    templates: List[RecurringCreate]
 
 
 class RecurringTemplate(BaseModel):

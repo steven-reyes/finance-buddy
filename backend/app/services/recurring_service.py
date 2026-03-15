@@ -119,6 +119,15 @@ def _add_frequency(d: date, frequency: str, original_day: int) -> date:
     return d
 
 
+def bulk_create(templates: list) -> list:
+    """Create multiple recurring templates at once."""
+    results = []
+    for t in templates:
+        result = create(t)
+        results.append(result)
+    return results
+
+
 def generate_due_transactions() -> int:
     """Generate all due recurring transactions up to today. Returns count of generated transactions."""
     today = date.today()

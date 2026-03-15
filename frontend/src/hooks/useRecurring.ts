@@ -66,6 +66,23 @@ export function useDeleteRecurring() {
   });
 }
 
+export function useBulkCreateRecurring() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (templates: Array<{
+      type: string; amount: number; description: string;
+      category_id: number; frequency: string; start_date: string;
+    }>) => {
+      const { data } = await api.post('/recurring/bulk', { templates });
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recurring'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
 export function useGenerateRecurring() {
   const qc = useQueryClient();
   return useMutation({

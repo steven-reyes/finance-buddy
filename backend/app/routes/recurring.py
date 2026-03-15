@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.models.recurring import RecurringCreate, RecurringUpdate
+from app.models.recurring import RecurringCreate, RecurringUpdate, BulkRecurringCreate
 from app.services import recurring_service
 
 router = APIRouter(prefix="/api/recurring", tags=["recurring"])
@@ -13,6 +13,12 @@ def list_recurring():
 @router.post("", status_code=201)
 def create_recurring(dto: RecurringCreate):
     return recurring_service.create(dto)
+
+
+@router.post("/bulk", status_code=201)
+def bulk_create_recurring(dto: BulkRecurringCreate):
+    results = recurring_service.bulk_create(dto.templates)
+    return results
 
 
 @router.put("/{template_id}")
