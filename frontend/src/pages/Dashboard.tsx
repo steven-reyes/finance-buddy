@@ -7,7 +7,7 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, BarChart3, Plus, X,
   CheckCircle, AlertTriangle, XCircle, Info, Lightbulb, Calendar,
-  ArrowLeftRight, ArrowUp, ArrowDown, CreditCard,
+  ArrowLeftRight, ArrowUp, ArrowDown, CreditCard, ChevronDown,
 } from 'lucide-react';
 import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth, useMonthlyInsights, useMonthComparison } from '../hooks/useDashboard';
 import { useTransactions } from '../hooks/useTransactions';
@@ -32,6 +32,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [month, setMonth] = useState(getCurrentMonth());
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const [paycheckDismissed, setPaycheckDismissed] = useState(() => sessionStorage.getItem('paycheck-prompt-dismissed') === 'true');
 
   const { data: summary, isLoading: loadingSummary } = useDashboardSummary(month);
@@ -188,29 +189,38 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* Feature 1: Monthly Insights Widget */}
+      {/* Feature 1: Monthly Insights — Collapsible Accordion */}
       {insights && insights.insights && insights.insights.length > 0 && (
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Lightbulb size={20} className="text-yellow-400" />
-            <h2 className="text-lg font-semibold">Monthly Insights</h2>
-          </div>
-          <div className="space-y-2">
-            {insights.insights.slice(0, 5).map((insight, i) => {
-              const config = {
-                positive: { bg: 'bg-green-500/10', text: 'text-green-400', Icon: CheckCircle },
-                warning: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', Icon: AlertTriangle },
-                negative: { bg: 'bg-red-500/10', text: 'text-red-400', Icon: XCircle },
-                info: { bg: 'bg-blue-500/10', text: 'text-blue-400', Icon: Info },
-              }[insight.type];
-              return (
-                <div key={i} className={`flex items-center gap-3 rounded-lg px-4 py-3 ${config.bg}`}>
-                  <config.Icon size={18} className={config.text} />
-                  <span className={`text-sm ${config.text}`}>{insight.message}</span>
-                </div>
-              );
-            })}
-          </div>
+        <div className="bg-gray-900 rounded-xl border border-gray-800">
+          <button
+            onClick={() => setInsightsOpen(!insightsOpen)}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-800/50 transition-colors rounded-xl"
+          >
+            <div className="flex items-center gap-2">
+              <Lightbulb size={18} className="text-yellow-400" />
+              <span className="text-sm font-semibold text-gray-200">Monthly Insights</span>
+              <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{insights.insights.length}</span>
+            </div>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform ${insightsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {insightsOpen && (
+            <div className="px-5 pb-4 space-y-2">
+              {insights.insights.slice(0, 5).map((insight, i) => {
+                const config = {
+                  positive: { bg: 'bg-green-500/10', text: 'text-green-400', Icon: CheckCircle },
+                  warning: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', Icon: AlertTriangle },
+                  negative: { bg: 'bg-red-500/10', text: 'text-red-400', Icon: XCircle },
+                  info: { bg: 'bg-blue-500/10', text: 'text-blue-400', Icon: Info },
+                }[insight.type];
+                return (
+                  <div key={i} className={`flex items-center gap-3 rounded-lg px-4 py-2.5 ${config.bg}`}>
+                    <config.Icon size={16} className={config.text} />
+                    <span className={`text-sm ${config.text}`}>{insight.message}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
