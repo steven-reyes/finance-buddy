@@ -10,15 +10,45 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 
 
 @router.get("/transactions")
-def export_transactions(format: str = Query(default="csv")):
+def export_transactions(
+    format: str = Query(default="csv"),
+    type: str = Query(default=None),
+    category_id: int = Query(default=None),
+    start_date: str = Query(default=None),
+    end_date: str = Query(default=None),
+    search: str = Query(default=None),
+):
     conn = get_connection()
     try:
-        rows = conn.execute(
+        base = (
             "SELECT tx.*, c.name as category_name "
             "FROM transactions tx "
-            "LEFT JOIN categories c ON tx.category_id = c.id "
-            "ORDER BY tx.date DESC"
-        ).fetchall()
+            "LEFT JOIN categories c ON tx.category_id = c.id"
+        )
+        conditions = []
+        params = []
+        if type:
+            conditions.append("tx.type = ?")
+            params.append(type)
+        if category_id is not None:
+            conditions.append("tx.category_id = ?")
+            params.append(category_id)
+        if start_date:
+            conditions.append("tx.date >= ?")
+            params.append(start_date)
+        if end_date:
+            conditions.append("tx.date <= ?")
+            params.append(end_date)
+        if search:
+            conditions.append("(tx.description LIKE ? OR tx.notes LIKE ?)")
+            search_term = f"%{search}%"
+            params.extend([search_term, search_term])
+
+        where = ""
+        if conditions:
+            where = " WHERE " + " AND ".join(conditions)
+
+        rows = conn.execute(f"{base}{where} ORDER BY tx.date DESC", params).fetchall()
         transactions = [dict(r) for r in rows]
     finally:
         conn.close()

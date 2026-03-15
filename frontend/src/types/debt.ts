@@ -42,6 +42,7 @@ export interface PayoffPlan {
     estimated_payoff_date: string;
     months_to_payoff: number;
     total_interest: number;
+    total_interest_paid: number;
   }>;
   total_months: number;
   total_interest: number;

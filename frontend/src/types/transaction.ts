@@ -24,6 +24,9 @@ export interface PaginatedResult<T> {
   page: number;
   per_page: number;
   total_pages: number;
+  filtered_income?: number;
+  filtered_expenses?: number;
+  filtered_net?: number;
 }
 
 export interface TransactionFilters {
@@ -32,6 +35,8 @@ export interface TransactionFilters {
   start_date?: string;
   end_date?: string;
   search?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
   page?: number;
   per_page?: number;
 }

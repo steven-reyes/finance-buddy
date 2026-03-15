@@ -48,6 +48,8 @@ class TransactionFilters(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     search: Optional[str] = None
+    sort_by: Optional[str] = None
+    sort_order: Optional[Literal['asc', 'desc']] = None
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=20, ge=1, le=100)
 

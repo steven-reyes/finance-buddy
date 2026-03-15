@@ -61,10 +61,27 @@ def get_all(filters: TransactionFilters) -> dict:
         total_pages = max(1, math.ceil(total / filters.limit))
         offset = (filters.page - 1) * filters.limit
 
+        # Compute filtered totals across all pages
+        totals_sql = (
+            f"SELECT "
+            f"COALESCE(SUM(CASE WHEN tx.type = 'income' THEN tx.amount ELSE 0 END), 0) as filtered_income, "
+            f"COALESCE(SUM(CASE WHEN tx.type = 'expense' THEN tx.amount ELSE 0 END), 0) as filtered_expenses "
+            f"{base_query}{where_clause}"
+        )
+        total_row = conn.execute(totals_sql, params).fetchone()
+        filtered_income = total_row["filtered_income"]
+        filtered_expenses = total_row["filtered_expenses"]
+
+        # Sorting
+        valid_sorts = {"date": "tx.date", "description": "tx.description", "amount": "tx.amount", "category": "c.name"}
+        sort_col = valid_sorts.get(filters.sort_by, "tx.date")
+        sort_dir = "ASC" if filters.sort_order == "asc" else "DESC"
+        order_clause = f"ORDER BY {sort_col} {sort_dir}, tx.id DESC"
+
         select_sql = (
             f"SELECT DISTINCT tx.*, c.name as category_name, c.color as category_color, c.icon as category_icon "
             f"{base_query}{where_clause} "
-            f"ORDER BY tx.date DESC, tx.id DESC LIMIT ? OFFSET ?"
+            f"{order_clause} LIMIT ? OFFSET ?"
         )
         rows = conn.execute(select_sql, params + [filters.limit, offset]).fetchall()
 
@@ -80,6 +97,9 @@ def get_all(filters: TransactionFilters) -> dict:
             "page": filters.page,
             "limit": filters.limit,
             "total_pages": total_pages,
+            "filtered_income": filtered_income,
+            "filtered_expenses": filtered_expenses,
+            "filtered_net": filtered_income - filtered_expenses,
         }
     finally:
         conn.close()
@@ -175,6 +195,19 @@ def delete(tx_id: int) -> bool:
         cursor = conn.execute("DELETE FROM transactions WHERE id = ?", (tx_id,))
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def bulk_delete(ids: list) -> int:
+    if not ids:
+        return 0
+    conn = get_connection()
+    try:
+        placeholders = ",".join("?" * len(ids))
+        cursor = conn.execute(f"DELETE FROM transactions WHERE id IN ({placeholders})", ids)
+        conn.commit()
+        return cursor.rowcount
     finally:
         conn.close()
 

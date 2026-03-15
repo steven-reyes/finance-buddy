@@ -928,7 +928,7 @@ export default function Debts() {
           generated_at: string;
           summary: { total_owed: number; total_minimum_monthly: number; monthly_interest_cost: number; total_debts: number };
           progress: { total_original: number; total_paid: number; paid_percentage: number; months_remaining: number; debt_free_date: string | null; paid_off_count: number; active_count: number; total_debts: number };
-          payoff_plan: { strategy: string; total_months: number; total_interest: number; debt_free_date: string | null; debts: Array<{ name: string; current_balance: number; interest_rate: number; estimated_payoff_date: string; months_to_payoff: number; total_interest: number }> };
+          payoff_plan: { strategy: string; total_months: number; total_interest: number; debt_free_date: string | null; debts: Array<{ name: string; current_balance: number; interest_rate: number; estimated_payoff_date: string; months_to_payoff: number; total_interest: number; total_interest_paid: number }> };
           debts: Array<{ name: string; creditor: string; type: string; original_amount: number; current_balance: number; minimum_payment: number; interest_rate: number; priority: number; status: string; total_paid: number; payments: Array<{ amount: number; date: string; note: string | null }> }>;
         };
         const fc = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

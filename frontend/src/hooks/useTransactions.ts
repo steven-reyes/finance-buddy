@@ -12,6 +12,8 @@ export function useTransactions(filters: TransactionFilters = {}) {
       if (filters.start_date) params.start_date = filters.start_date;
       if (filters.end_date) params.end_date = filters.end_date;
       if (filters.search) params.search = filters.search;
+      if (filters.sort_by) params.sort_by = filters.sort_by;
+      if (filters.sort_order) params.sort_order = filters.sort_order;
       if (filters.page) params.page = filters.page;
       if (filters.per_page) params.per_page = filters.per_page;
       const { data } = await api.get('/transactions', { params });
@@ -107,6 +109,20 @@ export function useDeleteTransaction() {
   return useMutation({
     mutationFn: async (id: number) => {
       await api.delete(`/transactions/${id}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+export function useBulkDeleteTransactions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: number[]) => {
+      const { data } = await api.post('/transactions/bulk-delete', ids);
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });

@@ -20,6 +20,8 @@ def list_transactions(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     search: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[Literal["asc", "desc"]] = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
 ):
@@ -30,6 +32,8 @@ def list_transactions(
         start_date=start_date,
         end_date=end_date,
         search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
         page=page,
         limit=limit,
     )
@@ -86,6 +90,12 @@ def delete_transaction(transaction_id: int):
             status_code=404,
             detail={"error": {"code": "NOT_FOUND", "message": "Transaction not found"}},
         )
+
+
+@router.post("/bulk-delete")
+def bulk_delete_transactions(ids: List[int]):
+    deleted = transaction_service.bulk_delete(ids)
+    return {"deleted": deleted}
 
 
 @router.post("/bulk", status_code=201)

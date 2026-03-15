@@ -3,6 +3,7 @@ export interface Budget {
   category_id: number;
   month: string;
   amount: number;
+  limit_amount: number;
   warn_threshold: number;
   created_at: string;
 }
