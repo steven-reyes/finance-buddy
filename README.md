@@ -11,6 +11,7 @@ A personal finance management web application that helps you track income, expen
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are.
 - **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load.
 - **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
+- **Screenshot/OCR Import** - Upload photos of receipts or bank statements. Tesseract OCR extracts text, regex heuristics parse dollar amounts, dates, and descriptions. Review and edit extracted transactions in an editable table before confirming import.
 - **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
 - **Data Export** - Export transactions as CSV, full database as JSON, or download the raw SQLite backup file.
 - **19 Default Categories** - Pre-seeded expense categories (Rent, Groceries, Utilities, Transportation, Entertainment, Dining Out, Healthcare, Insurance, Subscriptions, Clothing, Education, Personal Care, Other) and income categories (Salary, Freelance, Interest/Dividends, Gifts, Refunds, Other Income). Add your own custom categories.
@@ -25,7 +26,9 @@ A personal finance management web application that helps you track income, expen
 | Pydantic 2.10 | Request/response validation |
 | SQLite (built-in) | Database with WAL mode and foreign key enforcement |
 | Uvicorn 0.32 | ASGI server |
-| python-multipart | File upload handling (CSV import) |
+| python-multipart | File upload handling (CSV/image import) |
+| pytesseract 0.3.13 | Python wrapper for Tesseract OCR engine |
+| Pillow 11.0 | Image processing for OCR input |
 
 ### Frontend
 | Technology | Purpose |
@@ -48,6 +51,11 @@ A personal finance management web application that helps you track income, expen
 - **Python 3.12+** - [python.org](https://www.python.org/downloads/)
 - **Node.js 18+** - [nodejs.org](https://nodejs.org/)
 - **npm** (comes with Node.js)
+- **Tesseract OCR** (optional, for screenshot import):
+  - Ubuntu/Debian: `sudo apt install tesseract-ocr`
+  - macOS: `brew install tesseract`
+  - Windows: [Download installer](https://github.com/UB-Mannheim/tesseract/wiki)
+  - The app works without Tesseract — the screenshot import tab will show install instructions if it's missing
 
 ## Quick Start
 
@@ -109,7 +117,8 @@ finance-buddy/
 │       ├── main.py                   # FastAPI app entry, CORS, router registration
 │       ├── database.py               # SQLite connection, migrations, seed data
 │       ├── migrations/
-│       │   └── 001_initial.sql       # Full database schema (12 tables)
+│       │   ├── 001_initial.sql       # Full database schema (12 tables)
+│       │   └── 002_ocr_confirmed_status.sql  # Add 'confirmed' status to ocr_uploads
 │       ├── models/                   # Pydantic models for validation
 │       │   ├── category.py
 │       │   ├── transaction.py
@@ -128,7 +137,8 @@ finance-buddy/
 │       │   ├── tag_service.py
 │       │   ├── recurring_service.py
 │       │   ├── dashboard_service.py
-│       │   └── csv_service.py
+│       │   ├── csv_service.py
+│       │   └── ocr_service.py        # Tesseract OCR + regex parsing
 │       └── routes/                   # API endpoint definitions
 │           ├── categories.py
 │           ├── transactions.py
@@ -139,6 +149,7 @@ finance-buddy/
 │           ├── recurring.py
 │           ├── dashboard.py
 │           ├── csv_import.py
+│           ├── ocr.py                # Screenshot/image OCR import
 │           └── export.py
 ├── frontend/                         # React/TypeScript frontend
 │   ├── package.json
@@ -152,7 +163,7 @@ finance-buddy/
 │       ├── index.css                 # Tailwind imports
 │       ├── components/
 │       │   └── ui/
-│       │       └── AppShell.tsx      # Sidebar layout with navigation
+│       │       └── AppShell.tsx      # Sidebar layout with navigation (responsive, mobile hamburger menu)
 │       ├── hooks/                    # React Query hooks for every API domain
 │       │   ├── useCategories.ts
 │       │   ├── useTransactions.ts
@@ -212,7 +223,7 @@ SQLite database with 12 tables:
 | `tags` | Custom labels for transactions. |
 | `transaction_tags` | Many-to-many junction. CASCADE on both sides. |
 | `csv_imports` | Audit trail for CSV imports with file hash for duplicate detection. |
-| `ocr_uploads` | Placeholder for future OCR import feature. |
+| `ocr_uploads` | Tracks uploaded images for OCR processing. Stores raw extracted text, parsed transaction data, and processing status (pending/processed/confirmed/failed). |
 | `_migrations` | Tracks applied SQL migration files. |
 
 ### Conventions
@@ -247,7 +258,8 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | POST | `/api/transactions` | Create (amount in cents, `tag_ids` optional) |
 | PUT | `/api/transactions/{id}` | Update |
 | DELETE | `/api/transactions/{id}` | Delete |
-| POST | `/api/transactions/bulk` | Bulk create (used by CSV import) |
+| POST | `/api/transactions/bulk` | Bulk create (used by CSV/OCR import) |
+| POST | `/api/transactions/{id}/tags` | Set tags for a transaction (replaces existing) |
 
 #### Budgets
 | Method | Path | Description |
@@ -256,7 +268,7 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | POST | `/api/budgets` | Create budget |
 | PUT | `/api/budgets/{id}` | Update limit or threshold |
 | DELETE | `/api/budgets/{id}` | Delete |
-| POST | `/api/budgets/copy-forward` | Copy budgets to target month |
+| POST | `/api/budgets/copy-forward` | Auto-detect most recent month with budgets and copy to `{ target_month }` |
 
 #### Investments
 | Method | Path | Description |
@@ -312,11 +324,18 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | POST | `/api/csv/upload` | Upload CSV file, returns headers + preview rows |
 | POST | `/api/csv/confirm` | Apply column mapping and bulk insert |
 
+#### OCR Import
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/ocr/status` | Check if Tesseract OCR is available on the system |
+| POST | `/api/ocr/upload` | Upload image (JPG/PNG), run OCR, return extracted transaction candidates |
+| POST | `/api/ocr/confirm` | Confirm and import edited transactions from OCR extraction |
+
 #### Data Export
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/export/transactions?format=csv` | Export all transactions as CSV |
-| GET | `/api/export/all?format=json` | Export entire database as JSON |
+| GET | `/api/export/all?format=json` | Export entire database as JSON (all tables including csv_imports, ocr_uploads) |
 | GET | `/api/export/backup` | Download raw SQLite file |
 
 ### Error Response Format
@@ -338,14 +357,23 @@ All errors return a consistent envelope:
 |-------|------|-------------|
 | `/` | Dashboard | Summary cards, monthly trend chart, spending donut, budget health bars, recent transactions |
 | `/transactions` | Transactions | Filterable, searchable, paginated transaction list with add/edit/delete |
-| `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes |
+| `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector |
 | `/transactions/{id}/edit` | Edit Transaction | Same form pre-populated with existing data |
 | `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward |
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
-| `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions |
-| `/import` | Import | 4-step CSV import wizard |
+| `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
+| `/import` | Import | Tabbed: CSV import (4-step wizard) and Screenshot/OCR import (3-step wizard) |
 | `/settings` | Settings | Tabbed: Categories, Recurring Templates, Tags, Data Export |
+
+## UX Polish
+
+- **Empty states** - Every page shows a helpful message with a call-to-action button when no data exists (e.g., "No transactions yet. Add your first transaction to get started.")
+- **Loading skeletons** - Animated pulse placeholders on Dashboard, Transactions, Budgets, Investments, Savings Goals, and Settings while data loads
+- **Error banners** - Red error messages displayed inline when API mutations fail (create, update, delete)
+- **Confirm dialogs** - All destructive actions (delete transaction, budget, investment, goal, category, tag) prompt for confirmation
+- **Responsive design** - Sidebar collapses on mobile with hamburger menu toggle, backdrop overlay, and auto-close on navigation
+- **Dark theme** - Consistent dark UI (gray-950 background, gray-900 cards, blue/green/red accents)
 
 ## Security
 
