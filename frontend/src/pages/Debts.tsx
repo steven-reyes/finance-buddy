@@ -464,7 +464,7 @@ function PayoffStrategy() {
                     <td className="py-2 px-2 text-right text-gray-300">{d.interest_rate}%</td>
                     <td className="py-2 px-2 text-right text-gray-300">{d.estimated_payoff_date ? formatDate(d.estimated_payoff_date) : 'N/A'}</td>
                     <td className="py-2 px-2 text-right text-gray-300">{d.months_to_payoff}</td>
-                    <td className="py-2 px-2 text-right text-yellow-400">{formatCents(d.total_interest)}</td>
+                    <td className="py-2 px-2 text-right text-yellow-400">{formatCents(d.total_interest_paid ?? d.total_interest ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -950,7 +950,7 @@ export default function Debts() {
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${d.interest_rate}%</td>
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${d.months_to_payoff} mo</td>
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${d.estimated_payoff_date}</td>
-            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${fc(d.total_interest)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${fc(d.total_interest_paid ?? d.total_interest ?? 0)}</td>
           </tr>`).join('');
 
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Finance Buddy - Debt Report</title>

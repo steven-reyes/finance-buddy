@@ -894,7 +894,7 @@ export default function Budgets() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-400">
-                    {formatCents(b.spent)} of {formatCents(b.amount)} spent
+                    {formatCents(b.spent)} of {formatCents(b.limit_amount || b.amount)} spent
                   </span>
                   <span className={`font-medium ${
                     pct >= 100 ? 'text-red-400' : pct >= b.warn_threshold ? 'text-yellow-400' : 'text-green-400'
