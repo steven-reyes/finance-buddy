@@ -688,6 +688,275 @@ for m in [test_month, "2026-09"]:
     for b in r.json():
         requests.delete(f"{BASE}/budgets/{b['id']}")
 
+# ─── 17. DEBT TRACKER ─────────────────────────────────────
+print("\n[17] DEBT TRACKER")
+
+# Create debts of different types
+r = requests.post(f"{BASE}/debts", json={
+    "name": "Chime Advance", "type": "advance", "creditor": "Chime",
+    "original_amount": 25000, "current_balance": 25000,
+    "minimum_payment": 25000, "is_auto_deduct": True
+})
+test("Create advance debt", r.status_code == 201)
+chime_id = r.json()["id"]
+test("Advance auto-priority is 2", r.json()["priority"] == 2, f"got {r.json()['priority']}")
+test("Auto-deduct flag set", r.json()["is_auto_deduct"] == 1)
+
+r = requests.post(f"{BASE}/debts", json={
+    "name": "Back Rent", "type": "bill_arrears", "creditor": "Housing Program",
+    "original_amount": 240000, "current_balance": 240000,
+    "minimum_payment": 50000
+})
+test("Create bill arrears debt", r.status_code == 201)
+rent_debt_id = r.json()["id"]
+test("Bill arrears auto-priority is 1", r.json()["priority"] == 1, f"got {r.json()['priority']}")
+
+r = requests.post(f"{BASE}/debts", json={
+    "name": "Friend Loan", "type": "personal", "creditor": "John",
+    "original_amount": 200000, "current_balance": 150000,
+    "minimum_payment": 10000
+})
+test("Create personal debt", r.status_code == 201)
+friend_debt_id = r.json()["id"]
+test("Personal auto-priority is 5", r.json()["priority"] == 5, f"got {r.json()['priority']}")
+
+r = requests.post(f"{BASE}/debts", json={
+    "name": "Phone Bill Overdue", "type": "bill_arrears", "creditor": "T-Mobile",
+    "original_amount": 15000, "current_balance": 15000,
+    "minimum_payment": 15000
+})
+test("Create phone arrears", r.status_code == 201)
+phone_debt_id = r.json()["id"]
+
+r = requests.post(f"{BASE}/debts", json={
+    "name": "Credit Card", "type": "credit_card", "creditor": "Capital One",
+    "original_amount": 500000, "current_balance": 350000,
+    "minimum_payment": 7500, "interest_rate": 24.99
+})
+test("Create credit card debt", r.status_code == 201)
+cc_debt_id = r.json()["id"]
+test("CC auto-priority is 4", r.json()["priority"] == 4, f"got {r.json()['priority']}")
+
+# Validation tests
+r = requests.post(f"{BASE}/debts", json={
+    "name": "Bad", "type": "invalid_type", "creditor": "X",
+    "original_amount": 100, "current_balance": 100
+})
+test("Invalid debt type rejected", r.status_code == 422, f"got {r.status_code}")
+
+r = requests.post(f"{BASE}/debts", json={
+    "name": "Bad", "type": "loan", "creditor": "X",
+    "original_amount": -100, "current_balance": 100
+})
+test("Negative original amount rejected", r.status_code == 422, f"got {r.status_code}")
+
+r = requests.post(f"{BASE}/debts", json={
+    "name": "", "type": "loan", "creditor": "X",
+    "original_amount": 100, "current_balance": 100
+})
+test("Empty name rejected", r.status_code == 422, f"got {r.status_code}")
+
+# List debts
+r = requests.get(f"{BASE}/debts")
+test("List all debts", r.status_code == 200)
+all_debts = r.json()
+test("5 debts created", len(all_debts) == 5, f"got {len(all_debts)}")
+test("Ordered by priority (housing first)", all_debts[0]["priority"] <= all_debts[-1]["priority"],
+     f"first={all_debts[0]['priority']}, last={all_debts[-1]['priority']}")
+
+# Filter by status
+r = requests.get(f"{BASE}/debts", params={"status": "active"})
+test("Filter active debts", r.status_code == 200 and len(r.json()) == 5)
+
+# Get single debt
+r = requests.get(f"{BASE}/debts/{chime_id}")
+test("Get single debt", r.status_code == 200 and r.json()["name"] == "Chime Advance")
+
+r = requests.get(f"{BASE}/debts/99999")
+test("Non-existent debt 404", r.status_code == 404, f"got {r.status_code}")
+
+# Update debt
+r = requests.put(f"{BASE}/debts/{friend_debt_id}", json={"current_balance": 140000, "notes": "Paid some back"})
+test("Update debt balance", r.status_code == 200)
+test("Balance updated", r.json()["current_balance"] == 140000, f"got {r.json()['current_balance']}")
+
+# ─── 18. DEBT PAYMENTS ───────────────────────────────────
+print("\n[18] DEBT PAYMENTS")
+
+# Make a payment on friend debt
+r = requests.post(f"{BASE}/debts/{friend_debt_id}/payments", json={
+    "amount": 5000, "date": "2026-03-15", "note": "Partial payment"
+})
+test("Add debt payment", r.status_code == 201, f"got {r.status_code}: {r.text[:200]}")
+
+# Verify balance decreased
+r = requests.get(f"{BASE}/debts/{friend_debt_id}")
+test("Balance decreased after payment", r.json()["current_balance"] == 135000,
+     f"got {r.json()['current_balance']}")
+
+# List payments
+r = requests.get(f"{BASE}/debts/{friend_debt_id}/payments")
+test("List debt payments", r.status_code == 200 and len(r.json()) >= 1)
+
+# Multiple payments
+requests.post(f"{BASE}/debts/{friend_debt_id}/payments", json={"amount": 10000, "date": "2026-03-16"})
+r = requests.get(f"{BASE}/debts/{friend_debt_id}")
+test("Multiple payments reduce balance", r.json()["current_balance"] == 125000,
+     f"got {r.json()['current_balance']}")
+
+# Pay off small debt completely (phone $150)
+r = requests.post(f"{BASE}/debts/{phone_debt_id}/payments", json={
+    "amount": 15000, "date": "2026-03-15"
+})
+test("Full payment accepted", r.status_code == 201, f"got {r.status_code}")
+r = requests.get(f"{BASE}/debts/{phone_debt_id}")
+test("Debt marked as paid_off", r.json()["status"] == "paid_off",
+     f"got status={r.json()['status']}, balance={r.json()['current_balance']}")
+test("Balance is zero", r.json()["current_balance"] == 0)
+
+# Invalid payment (0 amount)
+r = requests.post(f"{BASE}/debts/{friend_debt_id}/payments", json={
+    "amount": 0, "date": "2026-03-15"
+})
+test("Zero payment rejected", r.status_code == 422, f"got {r.status_code}")
+
+# Payment on non-existent debt
+r = requests.post(f"{BASE}/debts/99999/payments", json={
+    "amount": 1000, "date": "2026-03-15"
+})
+test("Payment on non-existent debt", r.status_code in (404, 400), f"got {r.status_code}")
+
+# ─── 19. DEBT SUMMARY & INSIGHTS ─────────────────────────
+print("\n[19] DEBT SUMMARY & INSIGHTS")
+
+r = requests.get(f"{BASE}/debts/summary")
+test("Debt summary 200", r.status_code == 200)
+summary = r.json()
+test("Has total_debts", "total_debts" in summary)
+test("Has total_owed", "total_owed" in summary)
+test("Has total_minimum_monthly", "total_minimum_monthly" in summary)
+test("Total owed > 0", summary["total_owed"] > 0)
+test("Active debt count correct", summary["total_debts"] >= 4,  # phone is paid off
+     f"got {summary['total_debts']}")
+
+# Insights
+r = requests.get(f"{BASE}/debts/insights")
+test("Debt insights 200", r.status_code == 200, f"got {r.status_code}: {r.text[:200]}")
+if r.status_code == 200:
+    insights_data = r.json()
+    # Response may be a list or a dict with "insights" key
+    if isinstance(insights_data, dict):
+        insight_list = insights_data.get("insights", [])
+    else:
+        insight_list = insights_data
+    test("Insights returned", isinstance(insight_list, list))
+    test("Has at least 1 insight", len(insight_list) >= 1 or "summary" in (insights_data if isinstance(insights_data, dict) else {}),
+         f"got {len(insight_list)} insights")
+
+# ─── 20. PAYOFF PLAN ─────────────────────────────────────
+print("\n[20] PAYOFF PLAN")
+
+r = requests.get(f"{BASE}/debts/payoff-plan", params={"strategy": "avalanche"})
+test("Avalanche payoff plan 200", r.status_code == 200, f"got {r.status_code}: {r.text[:200]}")
+if r.status_code == 200:
+    plan = r.json()
+    test("Plan has strategy field", plan.get("strategy") == "avalanche")
+    test("Plan has debts list", "debts" in plan)
+    test("Plan has total_months", "total_months" in plan)
+
+r = requests.get(f"{BASE}/debts/payoff-plan", params={"strategy": "snowball"})
+test("Snowball payoff plan 200", r.status_code == 200)
+if r.status_code == 200:
+    snowball = r.json()
+    test("Snowball strategy label", snowball.get("strategy") == "snowball")
+
+# ─── 21. PAYCHECK ALLOCATION ─────────────────────────────
+print("\n[21] PAYCHECK ALLOCATION")
+
+# Allocate a typical paycheck
+r = requests.post(f"{BASE}/debts/allocate", json={
+    "paycheck_amount": 180000, "pay_date": "2026-03-15"
+})
+test("Paycheck allocation 200", r.status_code == 200, f"got {r.status_code}: {r.text[:300]}")
+if r.status_code == 200:
+    alloc = r.json()
+    test("Has allocations list", "allocations" in alloc and len(alloc["allocations"]) > 0)
+    test("Has total_allocated", "total_allocated" in alloc)
+    test("Has buffer or remaining", "buffer_remaining" in alloc or "remaining" in alloc)
+
+    # Check allocations have required fields
+    if alloc["allocations"]:
+        first = alloc["allocations"][0]
+        test("Allocation has amount fields",
+             "amount_allocated" in first or "amount" in first,
+             f"keys: {list(first.keys())}")
+
+    test("Paycheck amount matches input", alloc["paycheck_amount"] == 180000,
+         f"got {alloc.get('paycheck_amount')}")
+
+# Small paycheck — should show shortfall
+r = requests.post(f"{BASE}/debts/allocate", json={
+    "paycheck_amount": 30000, "pay_date": "2026-03-15"
+})
+test("Small paycheck allocation", r.status_code == 200)
+if r.status_code == 200:
+    alloc = r.json()
+    test("Small paycheck has allocations", "allocations" in alloc)
+
+# Zero paycheck rejected
+r = requests.post(f"{BASE}/debts/allocate", json={
+    "paycheck_amount": 0, "pay_date": "2026-03-15"
+})
+test("Zero paycheck rejected", r.status_code == 422, f"got {r.status_code}")
+
+# ─── 22. DEBT EDGE CASES ─────────────────────────────────
+print("\n[22] DEBT EDGE CASES")
+
+# Pause a debt
+r = requests.put(f"{BASE}/debts/{cc_debt_id}", json={"status": "paused"})
+test("Pause debt", r.status_code == 200 and r.json()["status"] == "paused")
+
+# Paused debts filtered correctly
+r = requests.get(f"{BASE}/debts", params={"status": "paused"})
+test("Filter paused debts", r.status_code == 200)
+paused = r.json()
+test("Only paused debts returned", all(d["status"] == "paused" for d in paused),
+     f"statuses: {[d['status'] for d in paused]}")
+
+# Reactivate
+r = requests.put(f"{BASE}/debts/{cc_debt_id}", json={"status": "active"})
+test("Reactivate debt", r.status_code == 200 and r.json()["status"] == "active")
+
+# Paid off debts filtered
+r = requests.get(f"{BASE}/debts", params={"status": "paid_off"})
+test("Filter paid_off debts", r.status_code == 200)
+paid = r.json()
+test("Paid off debts found", len(paid) >= 1)  # phone was paid off
+
+# Delete a debt (cascades payments)
+r = requests.delete(f"{BASE}/debts/{phone_debt_id}")
+test("Delete debt", r.status_code == 204)
+
+# Verify deleted
+r = requests.get(f"{BASE}/debts/{phone_debt_id}")
+test("Deleted debt returns 404", r.status_code == 404, f"got {r.status_code}")
+
+# Dashboard insights include debt warnings
+r = requests.get(f"{BASE}/dashboard/insights", params={"month": "2026-03"})
+test("Dashboard insights include debts", r.status_code == 200)
+insights = r.json().get("insights", [])
+debt_insights = [i for i in insights if "debt" in i.get("message", "").lower() or "owe" in i.get("message", "").lower()]
+test("Debt-related insights present", len(debt_insights) >= 1,
+     f"found {len(debt_insights)} debt insights out of {len(insights)} total")
+
+# Custom priority override
+r = requests.put(f"{BASE}/debts/{friend_debt_id}", json={"priority": 3})
+test("Override priority", r.status_code == 200 and r.json()["priority"] == 3)
+
+# Cleanup test debts
+for did in [chime_id, rent_debt_id, friend_debt_id, cc_debt_id]:
+    requests.delete(f"{BASE}/debts/{did}")
+
 # ─── CLEANUP ──────────────────────────────────────────────
 requests.delete(f"{BASE}/investments/{test_inv_id}")
 requests.delete(f"{BASE}/savings-goals/{test_goal_id}")
