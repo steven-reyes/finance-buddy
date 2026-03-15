@@ -4,8 +4,8 @@ A personal finance management web application that helps you track income, expen
 
 ## Features
 
-- **Dashboard** - At-a-glance view of net income, spending by category (donut chart), monthly income vs expense trends (bar chart), budget health, and recent transactions. Month picker for historical viewing.
-- **Transaction Management** - Full CRUD for income and expense entries. Filter by type, category, date range, and search text. Paginated list view with color-coded amounts.
+- **Dashboard** - At-a-glance view of net income, spending by category (donut chart), monthly income vs expense trends (bar chart), budget health, and recent transactions. Month picker for historical viewing. **Spending alerts** banner for near/over-budget categories. **Monthly insights** with auto-generated tips (spending changes, net status, goal progress). **Quick add** inline transaction form. **Upcoming bills** widget showing recurring expenses due in the next 7 days. **Month-over-month comparison** per-category spending deltas.
+- **Transaction Management** - Full CRUD for income and expense entries. Filter by type, category, tag, date range, and search text. Paginated list view with color-coded amounts. **Auto-categorize** suggests categories based on past transactions as you type descriptions. **Duplicate detection** warns when a similar transaction already exists (same amount within 3 days).
 - **Budget Tracking** - Set monthly spending limits per category. Visual progress bars turn green/yellow/red as you approach and exceed limits. Copy budgets forward month-to-month. **Smart Budget Wizard** auto-detects your income (from recurring templates or transaction history) and allocates budgets using proven frameworks (50/30/20, 70/20/10, 60/20/20, or custom percentages). Categories are pre-sorted into Needs/Wants/Savings tiers with editable amounts. Budget Summary Bar shows income vs budgeted vs remaining at a glance.
 - **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
@@ -261,6 +261,8 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | DELETE | `/api/transactions/{id}` | Delete |
 | POST | `/api/transactions/bulk` | Bulk create (used by CSV/OCR import) |
 | POST | `/api/transactions/{id}/tags` | Set tags for a transaction (replaces existing) |
+| GET | `/api/transactions/suggest-category?description=...` | Auto-suggest category based on past transactions with similar descriptions. Returns category with confidence level (high/medium) |
+| GET | `/api/transactions/check-duplicates?amount=&description=&date=` | Check for potential duplicate transactions (same amount + similar description within 3 days) |
 
 #### Budgets
 | Method | Path | Description |
@@ -369,9 +371,9 @@ All errors return a consistent envelope:
 
 | Route | Page | Description |
 |-------|------|-------------|
-| `/` | Dashboard | Summary cards, monthly trend chart, spending donut, budget health bars, recent transactions |
+| `/` | Dashboard | Summary cards, spending alerts, monthly insights, quick add form, monthly trend chart, spending donut, month-over-month comparison, budget health bars, recent transactions, upcoming bills |
 | `/transactions` | Transactions | Filterable, searchable, paginated transaction list with add/edit/delete |
-| `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector |
+| `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector, auto-categorize suggestions, duplicate detection warnings |
 | `/transactions/{id}/edit` | Edit Transaction | Same form pre-populated with existing data |
 | `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward, Smart Setup Wizard (income detection + framework selection + auto-allocation), Budget Summary Bar |
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
