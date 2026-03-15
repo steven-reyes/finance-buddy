@@ -10,7 +10,7 @@ A personal finance management web application that helps you track income, expen
 - **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
 - **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load. **Quick Setup Wizard** guides you through common income sources (salary, freelance) and expenses (rent, utilities, insurance, subscriptions like Netflix/Spotify with pre-filled prices) in a 3-step checklist flow. Shows net income summary before creating all templates at once.
-- **Debt Tracker** - Track all debts: cash advances (Chime, Dave), personal loans (friends, family), credit cards, overdue bills (rent, utilities), medical, and other. Auto-assigns priority (housing=1, advance=2, loan=3, credit card=4, personal=5). Log payments to reduce balances — auto-marks as paid off when balance reaches zero. **Paycheck Planner** shows a waterfall visualization of where every dollar goes in priority order (auto-deductions first, then housing, utilities, minimums, essentials for food/transport, extra debt payment, buffer) with shortfall warnings when the paycheck doesn't cover all obligations. **Payoff calculator** with avalanche (highest interest first) and snowball (smallest balance first) strategies showing estimated debt-free date. **Smart insights**: debt-to-income ratio, advance cycle cost, housing risk alerts. **Interactive**: expenses auto-match to debt creditors for one-click payment logging, "What if" simulator for exploring extra payment scenarios, paycheck arrival prompts on dashboard, due date alerts with urgency color-coding.
+- **Debt Tracker** - Track all debts: cash advances (Chime, Dave), personal loans (friends, family), credit cards, overdue bills (rent, utilities), medical, and other. Auto-assigns priority (housing=1, advance=2, loan=3, credit card=4, personal=5). Log payments to reduce balances — auto-marks as paid off when balance reaches zero. **Paycheck Planner** shows a waterfall visualization of where every dollar goes in priority order (auto-deductions first, then housing, utilities, minimums, essentials for food/transport, extra debt payment, buffer) with shortfall warnings when the paycheck doesn't cover all obligations. **Payoff calculator** with avalanche (highest interest first) and snowball (smallest balance first) strategies showing estimated debt-free date. **Smart insights**: debt-to-income ratio, advance cycle cost, housing risk alerts. **Interactive**: expenses auto-match to debt creditors for one-click payment logging, "What if" simulator for exploring extra payment scenarios, paycheck arrival prompts on dashboard, due date alerts with urgency color-coding. **Motivational**: debt balance over time chart (see the line go down), progress banner with payoff percentage, celebration banners when debts hit $0, debt-free countdown ("X months until debt-free"), exportable/printable debt report for sharing with case workers or personal records.
 - **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
 - **Screenshot/OCR Import** - Upload photos of receipts, bank statements, or banking app screenshots. Tesseract OCR extracts text with image preprocessing (auto-rotate, contrast enhancement, dark mode inversion, upscaling). Smart parsing detects document type (receipt vs statement), filters totals/subtotals/tax/balance lines, handles round dollar amounts ($12, $1,200), signed amounts (-$82.40, +$2,600), and parenthesized negatives (82.40). Auto-detects income (deposits, "paid you") vs expenses. Deduplicates against existing transactions. Auto-suggests categories from history. Review and edit in an editable table before confirming.
 - **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
@@ -353,6 +353,9 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | GET | `/api/debts/match-creditor?description=...` | Match expense description to active debt creditor for auto-linking payments |
 | GET | `/api/debts/simulate?extra_monthly=X&strategy=Y` | "What if" payoff simulation with extra monthly payment |
 | GET | `/api/debts/upcoming-due?days=7` | Debts with due dates in the next N days, sorted by urgency |
+| GET | `/api/debts/balance-history` | Total debt balance over time (for progress chart) |
+| GET | `/api/debts/progress` | Payoff progress: total paid, percentage, paid-off count, countdown, recently paid-off |
+| GET | `/api/debts/report` | Full exportable report: summary, progress, payoff plan, all debts with payment histories |
 | GET | `/api/debts/{id}` | Single debt with payment history |
 | POST | `/api/debts` | Create debt (auto-assigns priority from type) |
 | PUT | `/api/debts/{id}` | Update debt (balance, status, priority, etc.) |
@@ -407,7 +410,7 @@ All errors return a consistent envelope:
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
 | `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
-| `/debts` | Debts | Summary cards (total owed, minimums, DTI ratio), paycheck planner with waterfall visualization, priority-ordered debt cards with payments, payoff strategy (avalanche/snowball) with debt-free date, "What if" simulator with slider, auto-allocate from URL param |
+| `/debts` | Debts | Progress banner with payoff %, celebrations, debt-free countdown, balance over time chart, summary cards, paycheck planner waterfall, debt cards with payments, payoff strategy (avalanche/snowball), "What if" simulator, export/print report, download JSON |
 | `/import` | Import | Tabbed: CSV import (4-step wizard for bank statement CSVs) and Screenshot/OCR import (3-step wizard for photos of receipts, bank screenshots, credit card statements) |
 | `/settings` | Settings | Tabbed: Categories, Recurring Templates (with Quick Setup Wizard), Tags, Data Export |
 
@@ -467,6 +470,18 @@ Both calculate month-by-month simulation with interest, showing estimated payoff
 **Paycheck Arrival Prompt:** When a large income transaction is detected in the last 3 days and you have active debts, the dashboard prompts: "You received $2,600. Allocate this paycheck to your debts?" One click opens the paycheck planner pre-filled with the amount.
 
 **Debt Due Date Alerts:** Debts with upcoming due dates appear on the dashboard, color-coded by urgency (red = today/tomorrow, yellow = 2-3 days, gray = 4-7 days). High-balance priority-1 debts show a "CRITICAL" badge.
+
+### Motivational Features
+
+**Debt Balance Chart:** Recharts AreaChart showing total debt balance over time. Red gradient that shrinks as you pay down — visible, tangible progress.
+
+**Progress Banner:** Always-visible banner at top of Debts page showing overall payoff percentage, "X of Y debts paid off", total dollars paid, and monthly debt reduction.
+
+**Celebrations:** When a debt balance reaches $0, the system shows a celebration banner: "🎉 [Debt name] is PAID OFF!" Reinforces the wins that keep people motivated.
+
+**Debt-Free Countdown:** Prominent display: "🎯 X months until debt-free (est. [date])". Updates as payments are made. Shows celebration when debt-free.
+
+**Export/Print Report:** "Export Report" button generates a clean, white-background printable HTML page with full debt summary, progress, all debts with payment histories, and payoff timeline. Opens in new tab with auto-print dialog. "Download JSON" exports raw data. Designed for sharing with case workers, housing programs, or personal records.
 
 ## Smart Setup Wizards
 
