@@ -31,7 +31,6 @@ function deltaPercent(current: number, previous: number): string {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [month, setMonth] = useState(getCurrentMonth());
-  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [paycheckDismissed, setPaycheckDismissed] = useState(() => sessionStorage.getItem('paycheck-prompt-dismissed') === 'true');
 
@@ -64,55 +63,9 @@ export default function Dashboard() {
     sessionStorage.setItem('paycheck-prompt-dismissed', 'true');
   };
 
-  // Reset dismissed alerts when month changes
-  useEffect(() => {
-    setDismissedAlerts(new Set());
-  }, [month]);
-
-  // Spending alerts from budget health
-  const spendingAlerts = (budgetHealth || [])
-    .filter((b) => b.percentage >= b.warn_threshold || b.percentage >= 100)
-    .filter((b) => !dismissedAlerts.has(`${b.id}-${month}`))
-    .map((b) => ({
-      id: `${b.id}-${month}`,
-      status: b.percentage >= 100 ? 'over' as const : 'warning' as const,
-      category: b.category_name,
-      spent: b.spent,
-      limit: b.amount,
-      percentage: b.percentage,
-    }))
-    .slice(0, 3);
 
   return (
     <div className="p-6 space-y-6">
-      {/* Feature 3: Spending Alerts Banner */}
-      {spendingAlerts.length > 0 && (
-        <div className="space-y-2">
-          {spendingAlerts.map((alert) => (
-            <div
-              key={alert.id}
-              className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${
-                alert.status === 'over'
-                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                  : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-              }`}
-            >
-              <span>
-                {alert.status === 'over'
-                  ? `\u{1F6A8} ${alert.category} is over budget! ${formatCents(alert.spent)} spent of ${formatCents(alert.limit)} limit`
-                  : `\u{26A0}\u{FE0F} ${alert.category} is at ${alert.percentage.toFixed(0)}% of budget (${formatCents(alert.spent)} / ${formatCents(alert.limit)})`}
-              </span>
-              <button
-                onClick={() => setDismissedAlerts((prev) => new Set(prev).add(alert.id))}
-                className="ml-3 hover:opacity-70"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <input
