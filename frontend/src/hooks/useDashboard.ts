@@ -42,6 +42,25 @@ export function useBudgetHealth(month: string) {
   });
 }
 
+export function useMonthComparison(month: string) {
+  return useQuery({
+    queryKey: ['dashboard', 'month-comparison', month],
+    queryFn: async () => {
+      const { data } = await api.get('/dashboard/month-comparison', { params: { month } });
+      return data as Array<{
+        category_id: number;
+        category_name: string;
+        category_color: string | null;
+        category_icon: string | null;
+        current_amount: number;
+        previous_amount: number;
+        change_amount: number;
+        change_percent: number;
+      }>;
+    },
+  });
+}
+
 export function useMonthlyInsights(month: string) {
   return useQuery({
     queryKey: ['dashboard', 'insights', month],

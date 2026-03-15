@@ -36,6 +36,12 @@ def list_transactions(
     return transaction_service.get_all(filters)
 
 
+@router.get("/check-duplicates")
+def check_duplicates(amount: int = Query(...), description: str = Query(...), date: str = Query(...)):
+    duplicates = transaction_service.check_duplicates(amount, description, date)
+    return {"duplicates": duplicates, "count": len(duplicates)}
+
+
 @router.get("/suggest-category")
 def suggest_category(description: str = Query(..., min_length=1)):
     result = transaction_service.suggest_category(description)

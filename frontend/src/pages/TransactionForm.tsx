@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Sparkles } from 'lucide-react';
-import { useTransaction, useCreateTransaction, useUpdateTransaction, useSuggestCategory } from '../hooks/useTransactions';
+import { Sparkles, AlertTriangle } from 'lucide-react';
+import { useTransaction, useCreateTransaction, useUpdateTransaction, useSuggestCategory, useCheckDuplicates } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
 import { useTags } from '../hooks/useTags';
-import { toCents, toDollars } from '../lib/format';
+import { toCents, toDollars, formatCents } from '../lib/format';
 
 const schema = z.object({
   type: z.enum(['income', 'expense']),
@@ -58,7 +58,16 @@ export default function TransactionForm() {
   const selectedType = watch('type');
   const watchedDescription = watch('description');
   const watchedCategoryId = watch('category_id');
+  const watchedAmount = watch('amount');
+  const watchedDate = watch('date');
   const { data: categories } = useCategories(selectedType);
+
+  // Duplicate detection (only when creating)
+  const { data: duplicateData } = useCheckDuplicates(
+    !isEditing ? toCents(watchedAmount || 0) : 0,
+    debouncedDescription,
+    watchedDate || ''
+  );
 
   // Debounce description for auto-categorize
   useEffect(() => {
@@ -259,6 +268,20 @@ export default function TransactionForm() {
             placeholder="Any additional notes..."
           />
         </div>
+
+        {/* Duplicate Detection Warning */}
+        {!isEditing && duplicateData && duplicateData.count > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-4 py-3">
+            {duplicateData.duplicates.map((dup) => (
+              <div key={dup.id} className="flex items-center gap-2 text-sm text-yellow-400">
+                <AlertTriangle size={16} className="shrink-0" />
+                <span>
+                  Possible duplicate: {dup.description} for {formatCents(dup.amount)} on {dup.date}. Is this intentional?
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Buttons */}
         <div className="flex gap-3 pt-2">

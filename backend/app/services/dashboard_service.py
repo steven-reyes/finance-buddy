@@ -330,6 +330,49 @@ def get_monthly_insights(month: str) -> dict:
         conn.close()
 
 
+def get_month_comparison(month: str) -> list:
+    """Compare spending per category between current and previous month."""
+    from datetime import datetime, timedelta
+    conn = get_connection()
+    try:
+        dt = datetime.strptime(month + "-01", "%Y-%m-%d")
+        prev_dt = dt - timedelta(days=1)
+        prev_month = prev_dt.strftime("%Y-%m")
+
+        # Get all expense categories that have spending in either month
+        rows = conn.execute(
+            "SELECT c.id as category_id, c.name as category_name, c.color as category_color, c.icon as category_icon, "
+            "COALESCE(SUM(CASE WHEN strftime('%Y-%m', t.date) = ? THEN t.amount ELSE 0 END), 0) as current_amount, "
+            "COALESCE(SUM(CASE WHEN strftime('%Y-%m', t.date) = ? THEN t.amount ELSE 0 END), 0) as previous_amount "
+            "FROM categories c "
+            "LEFT JOIN transactions t ON t.category_id = c.id AND t.type = 'expense' "
+            "AND strftime('%Y-%m', t.date) IN (?, ?) "
+            "WHERE c.type = 'expense' "
+            "GROUP BY c.id "
+            "HAVING current_amount > 0 OR previous_amount > 0 "
+            "ORDER BY current_amount DESC",
+            (month, prev_month, month, prev_month),
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            d = dict(r)
+            current = d["current_amount"]
+            previous = d["previous_amount"]
+            d["change_amount"] = current - previous
+            if previous > 0:
+                d["change_percent"] = round((current - previous) / previous * 100, 1)
+            elif current > 0:
+                d["change_percent"] = 100.0
+            else:
+                d["change_percent"] = 0.0
+            results.append(d)
+
+        return results
+    finally:
+        conn.close()
+
+
 def get_budget_health(month: str) -> List[dict]:
     conn = get_connection()
     try:

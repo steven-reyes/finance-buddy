@@ -7,8 +7,9 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, BarChart3, Plus, X,
   CheckCircle, AlertTriangle, XCircle, Info, Lightbulb, Calendar,
+  ArrowLeftRight, ArrowUp, ArrowDown,
 } from 'lucide-react';
-import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth, useMonthlyInsights } from '../hooks/useDashboard';
+import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth, useMonthlyInsights, useMonthComparison } from '../hooks/useDashboard';
 import { useTransactions, useCreateTransaction } from '../hooks/useTransactions';
 import { useCategories } from '../hooks/useCategories';
 import { useUpcomingBills } from '../hooks/useRecurring';
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const { data: recentTxns } = useTransactions({ page: 1, per_page: 5 });
   const { data: insights } = useMonthlyInsights(month);
   const { data: upcomingBills } = useUpcomingBills(7);
+  const { data: monthComparison } = useMonthComparison(month);
   const { data: quickCategories } = useCategories(quickType);
   const createTransaction = useCreateTransaction();
 
@@ -366,6 +368,48 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Month-over-Month Category Comparison */}
+      {monthComparison && monthComparison.length > 0 && (
+        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <ArrowLeftRight size={20} className="text-purple-400" />
+            <h2 className="text-lg font-semibold">vs Last Month</h2>
+          </div>
+          <div className="space-y-2">
+            <div className="grid grid-cols-5 text-xs text-gray-500 pb-2 border-b border-gray-800">
+              <span className="col-span-1">Category</span>
+              <span className="text-right">This Month</span>
+              <span className="text-right">Last Month</span>
+              <span className="text-right">Change</span>
+              <span className="text-right">%</span>
+            </div>
+            {monthComparison.map((item) => (
+              <div key={item.category_id} className="grid grid-cols-5 items-center text-sm py-1.5">
+                <div className="col-span-1 flex items-center gap-2 truncate">
+                  <span className="text-base">{item.category_icon || ''}</span>
+                  <span className="text-gray-300 truncate">{item.category_name}</span>
+                </div>
+                <span className="text-right text-gray-200">{formatCents(item.current_amount)}</span>
+                <span className="text-right text-gray-400">{formatCents(item.previous_amount)}</span>
+                <div className="flex items-center justify-end gap-1">
+                  {item.change_amount !== 0 && (
+                    item.change_amount > 0
+                      ? <ArrowUp size={12} className="text-red-400" />
+                      : <ArrowDown size={12} className="text-green-400" />
+                  )}
+                  <span className={item.change_amount > 0 ? 'text-red-400' : item.change_amount < 0 ? 'text-green-400' : 'text-gray-400'}>
+                    {item.change_amount > 0 ? '+' : ''}{formatCents(item.change_amount)}
+                  </span>
+                </div>
+                <span className={`text-right text-xs ${item.change_percent > 0 ? 'text-red-400' : item.change_percent < 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                  {item.change_percent > 0 ? '+' : ''}{item.change_percent}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Budget Health */}

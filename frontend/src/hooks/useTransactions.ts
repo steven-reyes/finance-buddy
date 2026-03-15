@@ -88,6 +88,20 @@ export function useSuggestCategory(description: string) {
   });
 }
 
+export function useCheckDuplicates(amount: number, description: string, date: string) {
+  return useQuery({
+    queryKey: ['transactions', 'check-duplicates', amount, description, date],
+    queryFn: async () => {
+      const { data } = await api.get('/transactions/check-duplicates', {
+        params: { amount, description, date }
+      });
+      return data as { duplicates: Array<{ id: number; type: string; amount: number; date: string; description: string; category_name: string; category_icon: string }>; count: number };
+    },
+    enabled: amount > 0 && description.length >= 2,
+    staleTime: 30000,
+  });
+}
+
 export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({

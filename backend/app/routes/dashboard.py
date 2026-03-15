@@ -30,6 +30,11 @@ def get_monthly_insights(month: str = Query(..., pattern=r'^\d{4}-\d{2}$')):
     return dashboard_service.get_monthly_insights(month)
 
 
+@router.get("/month-comparison")
+def get_month_comparison(month: str = Query(...)):
+    return dashboard_service.get_month_comparison(month)
+
+
 @router.get("/budget-health")
 def get_budget_health(month: str = Query(..., pattern=r'^\d{4}-\d{2}$')):
     return dashboard_service.get_budget_health(month)

@@ -214,6 +214,25 @@ def suggest_category(description: str) -> dict | None:
         conn.close()
 
 
+def check_duplicates(amount: int, description: str, date: str) -> list:
+    """Check for potential duplicate transactions within 3 days."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT t.id, t.type, t.amount, t.date, t.description, "
+            "c.name as category_name, c.icon as category_icon "
+            "FROM transactions t "
+            "LEFT JOIN categories c ON t.category_id = c.id "
+            "WHERE t.amount = ? "
+            "AND t.description LIKE ? "
+            "AND ABS(julianday(t.date) - julianday(?)) <= 3",
+            (amount, f"%{description}%", date),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def bulk_create(transactions: List[TransactionCreate], csv_import_id: Optional[int] = None, ocr_upload_id: Optional[int] = None) -> List[dict]:
     conn = get_connection()
     created_ids = []
