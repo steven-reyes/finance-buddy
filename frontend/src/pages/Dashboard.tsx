@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Plus } from 'lucide-react';
 import { useDashboardSummary, useSpendingByCategory, useMonthlyTrends, useBudgetHealth } from '../hooks/useDashboard';
 import { useTransactions } from '../hooks/useTransactions';
 import { formatCents, formatDate, getCurrentMonth } from '../lib/format';
@@ -44,7 +44,29 @@ export default function Dashboard() {
 
       {/* Summary Cards */}
       {loadingSummary ? (
-        <div className="text-gray-400">Loading summary...</div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="h-28 bg-gray-800 rounded-xl animate-pulse" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-72 bg-gray-800 rounded-xl animate-pulse" />
+            <div className="h-72 bg-gray-800 rounded-xl animate-pulse" />
+          </div>
+        </div>
+      ) : summary && summary.income === 0 && summary.expenses === 0 && summary.investment_value === 0 ? (
+        <div className="bg-gray-900 rounded-xl border border-gray-800 p-12 text-center">
+          <p className="text-gray-400 mb-2">Welcome to Finance Buddy!</p>
+          <p className="text-gray-500 text-sm mb-4">Add some transactions to see your financial overview.</p>
+          <Link
+            to="/transactions/new"
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            <Plus size={16} />
+            Add Transaction
+          </Link>
+        </div>
       ) : summary ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <SummaryCard
@@ -91,7 +113,7 @@ export default function Dashboard() {
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
           <h2 className="text-lg font-semibold mb-4">Monthly Trends</h2>
           {loadingTrends ? (
-            <div className="text-gray-400">Loading...</div>
+            <div className="h-[280px] bg-gray-800 rounded-lg animate-pulse" />
           ) : trends && trends.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={trends.map(t => ({
@@ -121,7 +143,7 @@ export default function Dashboard() {
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
           <h2 className="text-lg font-semibold mb-4">Spending by Category</h2>
           {loadingSpending ? (
-            <div className="text-gray-400">Loading...</div>
+            <div className="h-[240px] bg-gray-800 rounded-lg animate-pulse" />
           ) : spending && spending.length > 0 ? (
             <div className="flex items-center gap-4">
               <ResponsiveContainer width="50%" height={240}>
@@ -175,7 +197,11 @@ export default function Dashboard() {
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
           <h2 className="text-lg font-semibold mb-4">Budget Health</h2>
           {loadingBudgets ? (
-            <div className="text-gray-400">Loading...</div>
+            <div className="space-y-3">
+              {[1,2,3].map(i => (
+                <div key={i} className="h-10 bg-gray-800 rounded-lg animate-pulse" />
+              ))}
+            </div>
           ) : budgetHealth && budgetHealth.length > 0 ? (
             <div className="space-y-3">
               {budgetHealth.map((b) => {

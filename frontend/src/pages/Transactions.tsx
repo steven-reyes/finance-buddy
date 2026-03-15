@@ -123,9 +123,28 @@ export default function Transactions() {
         </div>
       </div>
 
+      {/* Mutation error display */}
+      {deleteTransaction.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(deleteTransaction.error as any)?.response?.data?.error?.message || 'Failed to delete transaction. Please try again.'}
+        </div>
+      )}
+
       {/* Table */}
       {isLoading ? (
-        <div className="text-gray-400">Loading transactions...</div>
+        <div className="space-y-4">
+          <div className="h-8 bg-gray-800 rounded animate-pulse w-48" />
+          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4 border-b border-gray-800/50">
+                <div className="h-4 bg-gray-800 rounded animate-pulse w-24" />
+                <div className="h-4 bg-gray-800 rounded animate-pulse flex-1" />
+                <div className="h-4 bg-gray-800 rounded animate-pulse w-20" />
+                <div className="h-4 bg-gray-800 rounded animate-pulse w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
       ) : error ? (
         <div className="text-red-400">Error loading transactions. Please try again.</div>
       ) : data && data.data.length > 0 ? (
@@ -213,14 +232,21 @@ export default function Transactions() {
         </>
       ) : (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-12 text-center">
-          <p className="text-gray-400 mb-4">No transactions found.</p>
-          <Link
-            to="/transactions/new"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Plus size={16} />
-            Add your first transaction
-          </Link>
+          {filters.type || filters.category_id || filters.search || filters.start_date || filters.end_date ? (
+            <p className="text-gray-400">No transactions match your filters.</p>
+          ) : (
+            <>
+              <p className="text-gray-400 mb-2">No transactions yet.</p>
+              <p className="text-gray-500 text-sm mb-4">Add your first transaction to get started.</p>
+              <Link
+                to="/transactions/new"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus size={16} />
+                Add Transaction
+              </Link>
+            </>
+          )}
         </div>
       )}
     </div>

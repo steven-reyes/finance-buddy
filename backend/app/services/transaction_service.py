@@ -179,15 +179,15 @@ def delete(tx_id: int) -> bool:
         conn.close()
 
 
-def bulk_create(transactions: List[TransactionCreate], csv_import_id: Optional[int] = None) -> List[dict]:
+def bulk_create(transactions: List[TransactionCreate], csv_import_id: Optional[int] = None, ocr_upload_id: Optional[int] = None) -> List[dict]:
     conn = get_connection()
     created_ids = []
     try:
         for dto in transactions:
             cursor = conn.execute(
-                "INSERT INTO transactions (type, amount, date, description, notes, category_id, csv_import_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (dto.type, dto.amount, dto.date, dto.description, dto.notes, dto.category_id, csv_import_id),
+                "INSERT INTO transactions (type, amount, date, description, notes, category_id, csv_import_id, ocr_upload_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (dto.type, dto.amount, dto.date, dto.description, dto.notes, dto.category_id, csv_import_id, ocr_upload_id),
             )
             created_ids.append(cursor.lastrowid)
             if dto.tag_ids:

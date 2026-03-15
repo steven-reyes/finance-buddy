@@ -15,6 +15,7 @@ from app.routes import (
     dashboard,
     csv_import,
     export,
+    ocr,
 )
 
 
@@ -60,6 +61,7 @@ app.include_router(recurring.router)
 app.include_router(dashboard.router)
 app.include_router(csv_import.router)
 app.include_router(export.router)
+app.include_router(ocr.router)
 
 
 @app.get("/api/health")

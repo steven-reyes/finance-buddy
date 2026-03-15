@@ -196,9 +196,30 @@ export default function Investments() {
         </div>
       )}
 
+      {/* Mutation error display */}
+      {createInvestment.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(createInvestment.error as any)?.response?.data?.error?.message || 'Failed to create investment. Please try again.'}
+        </div>
+      )}
+      {deleteInvestment.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(deleteInvestment.error as any)?.response?.data?.error?.message || 'Failed to delete investment. Please try again.'}
+        </div>
+      )}
+      {updateValue.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(updateValue.error as any)?.response?.data?.error?.message || 'Failed to update value. Please try again.'}
+        </div>
+      )}
+
       {/* Investment Grid */}
       {isLoading ? (
-        <div className="text-gray-400">Loading investments...</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-40 bg-gray-800 rounded-xl animate-pulse" />
+          ))}
+        </div>
       ) : error ? (
         <div className="text-red-400">Error loading investments.</div>
       ) : investments && investments.length > 0 ? (
@@ -279,13 +300,14 @@ export default function Investments() {
         </div>
       ) : (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-12 text-center">
-          <p className="text-gray-400 mb-4">No investments tracked yet.</p>
+          <p className="text-gray-400 mb-2">No investment accounts yet.</p>
+          <p className="text-gray-500 text-sm mb-4">Start tracking your portfolio.</p>
           <button
             onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <Plus size={16} />
-            Add your first investment
+            Add Investment
           </button>
         </div>
       )}

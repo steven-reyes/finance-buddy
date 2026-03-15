@@ -188,8 +188,23 @@ function CategoriesTab() {
         </div>
       )}
 
+      {createCategory.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(createCategory.error as any)?.response?.data?.error?.message || 'Failed to save category. Please try again.'}
+        </div>
+      )}
+      {deleteCategory.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(deleteCategory.error as any)?.response?.data?.error?.message || 'Failed to delete category. Please try again.'}
+        </div>
+      )}
+
       {isLoading ? (
-        <div className="text-gray-400">Loading categories...</div>
+        <div className="space-y-2">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="h-12 bg-gray-800 rounded-lg animate-pulse" />
+          ))}
+        </div>
       ) : (
         <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
           <table className="w-full">
@@ -414,8 +429,23 @@ function RecurringTab() {
         </div>
       )}
 
+      {createRecurring.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(createRecurring.error as any)?.response?.data?.error?.message || 'Failed to create template. Please try again.'}
+        </div>
+      )}
+      {deleteRecurring.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(deleteRecurring.error as any)?.response?.data?.error?.message || 'Failed to delete template. Please try again.'}
+        </div>
+      )}
+
       {isLoading ? (
-        <div className="text-gray-400">Loading recurring templates...</div>
+        <div className="space-y-2">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-12 bg-gray-800 rounded-lg animate-pulse" />
+          ))}
+        </div>
       ) : templates && templates.length > 0 ? (
         <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
           <table className="w-full">
@@ -566,8 +596,23 @@ function TagsTab() {
         </div>
       )}
 
+      {createTag.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(createTag.error as any)?.response?.data?.error?.message || 'Failed to save tag. Please try again.'}
+        </div>
+      )}
+      {deleteTag.isError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+          {(deleteTag.error as any)?.response?.data?.error?.message || 'Failed to delete tag. Please try again.'}
+        </div>
+      )}
+
       {isLoading ? (
-        <div className="text-gray-400">Loading tags...</div>
+        <div className="flex flex-wrap gap-3">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="h-9 w-24 bg-gray-800 rounded-lg animate-pulse" />
+          ))}
+        </div>
       ) : tags && tags.length > 0 ? (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
           <div className="flex flex-wrap gap-3">
