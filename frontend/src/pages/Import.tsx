@@ -184,7 +184,8 @@ function CsvImport() {
           >
             <Upload size={48} className="mx-auto text-gray-500 mb-4" />
             <p className="text-gray-300 mb-2">Drag and drop a CSV file here</p>
-            <p className="text-gray-500 text-sm mb-4">or click to browse</p>
+            <p className="text-gray-500 text-sm mb-2">or click to browse</p>
+            <p className="text-gray-600 text-xs">Supports bank statement exports, credit card CSVs, and any CSV with transaction data</p>
             <input
               ref={fileInputRef}
               type="file"
