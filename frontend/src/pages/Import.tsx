@@ -25,14 +25,24 @@ interface OcrTransaction {
   date: string;
   description: string;
   category_id?: number;
+  is_duplicate?: boolean;
+  potential_duplicates?: Array<{ id: number; amount: number; date: string; description: string }>;
 }
 
 interface OcrUploadResponse {
   upload_id: number;
   filename: string;
   raw_text: string;
-  transactions: { amount: number; date: string; description: string; type: 'income' | 'expense' }[];
+  doc_type: 'receipt' | 'statement';
+  merchant_name: string | null;
+  transactions: Array<{
+    amount: number; date: string; description: string; type: 'income' | 'expense';
+    suggested_category_id?: number; suggested_category_name?: string; suggested_category_icon?: string;
+    is_duplicate?: boolean;
+    potential_duplicates?: Array<{ id: number; amount: number; date: string; description: string }>;
+  }>;
   count: number;
+  duplicate_count: number;
 }
 
 // ─── CSV Import (original functionality) ────────────────────────────
@@ -433,10 +443,12 @@ function ScreenshotImport() {
       setTransactions(
         data.transactions.map((t) => ({
           type: t.type,
-          amount: t.amount, // already in cents from API
+          amount: t.amount,
           date: t.date,
           description: t.description,
-          category_id: undefined,
+          category_id: t.suggested_category_id || undefined,
+          is_duplicate: t.is_duplicate || false,
+          potential_duplicates: t.potential_duplicates || [],
         }))
       );
       setOcrStep('review');
@@ -638,6 +650,12 @@ function ScreenshotImport() {
               <p className="text-sm text-gray-400 mt-1">
                 {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} found. Edit, add, or remove as needed.
               </p>
+              {transactions.some(t => t.is_duplicate) && (
+                <p className="text-sm text-yellow-400 mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  {transactions.filter(t => t.is_duplicate).length} potential duplicate{transactions.filter(t => t.is_duplicate).length !== 1 ? 's' : ''} detected — review highlighted rows
+                </p>
+              )}
             </div>
           </div>
 
@@ -655,7 +673,7 @@ function ScreenshotImport() {
               </thead>
               <tbody>
                 {transactions.map((txn, i) => (
-                  <tr key={i} className="border-b border-gray-800/50">
+                  <tr key={i} className={`border-b border-gray-800/50 ${txn.is_duplicate ? 'bg-yellow-500/5' : ''}`}>
                     <td className="px-3 py-2">
                       <button
                         onClick={() => updateTransaction(i, 'type', txn.type === 'expense' ? 'income' : 'expense')}
@@ -697,6 +715,12 @@ function ScreenshotImport() {
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Description"
                       />
+                      {txn.is_duplicate && txn.potential_duplicates && txn.potential_duplicates.length > 0 && (
+                        <p className="text-yellow-400 text-xs mt-1 flex items-center gap-1">
+                          <AlertCircle size={12} />
+                          Possible duplicate of existing transaction ({txn.potential_duplicates[0].description}, {txn.potential_duplicates[0].date})
+                        </p>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <select
