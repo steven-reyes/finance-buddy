@@ -16,9 +16,17 @@ except Exception:
 
 # Keywords that indicate summary/total lines (not individual items)
 TOTAL_KEYWORDS = re.compile(
-    r'\b(subtotal|sub\s*total|total|grand\s*total|balance|amount\s*due|'
+    r'\b(subtotal|sub\s*total|total|grand\s*total|balance|available\s*balance|amount\s*due|'
     r'tax|sales\s*tax|hst|gst|vat|tip|gratuity|change|cash|credit|debit|'
-    r'visa|mastercard|amex|payment|paid|tendered|savings|discount|you\s*saved)\b',
+    r'visa|mastercard|amex|paid|tendered|discount|you\s*saved|'
+    r'checking|savings\s*account|statement|recent\s*transactions|pending)\b',
+    re.IGNORECASE
+)
+
+# Keywords that indicate income (not expense)
+INCOME_KEYWORDS = re.compile(
+    r'\b(deposit|direct\s*deposit|payroll|salary|transfer\s*in|refund|'
+    r'cashback|cash\s*back|reimbursement|payment\s*received|credit)\b',
     re.IGNORECASE
 )
 
@@ -28,14 +36,23 @@ MERCHANT_STOP_WORDS = re.compile(
     re.IGNORECASE
 )
 
-# Amount pattern: $1,234.56 or 1234.56 or $12.99
-AMOUNT_PATTERN = re.compile(r'\$?\s*(\d{1,3}(?:,\d{3})*\.\d{2})')
+# Amount pattern: captures optional +/- sign before $ and the amount
+# Matches: -$82.40, +$2,600.00, $12.99, 12.99, - $82.40
+AMOUNT_PATTERN = re.compile(r'([+\-])?\s*\$?\s*(\d{1,3}(?:,\d{3})*\.\d{2})')
 
-# Date patterns
-DATE_PATTERNS = [
+# Date patterns (with year)
+DATE_PATTERNS_WITH_YEAR = [
     (re.compile(r'(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})'), '%m/%d/%Y'),
     (re.compile(r'(\d{4})-(\d{2})-(\d{2})'), '%Y-%m-%d'),
     (re.compile(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})', re.IGNORECASE), '%b %d %Y'),
+]
+
+# Date patterns WITHOUT year (common in banking app screenshots: "Mar 14", "03/14")
+DATE_PATTERNS_NO_YEAR = [
+    # "Mar 14" or "March 14"
+    re.compile(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})\b', re.IGNORECASE),
+    # "03/14" or "3/14"
+    re.compile(r'\b(\d{1,2})/(\d{1,2})\b'),
 ]
 
 
@@ -64,9 +81,12 @@ def extract_text_from_image(image_path: str) -> str:
     return text
 
 
-def _parse_date_from_text(text: str) -> Optional[str]:
+def _parse_date_from_text(text: str, allow_no_year: bool = False) -> Optional[str]:
     """Try to extract a date from a text string."""
-    for pattern, fmt in DATE_PATTERNS:
+    current_year = datetime.now().year
+
+    # Try patterns with year first
+    for pattern, fmt in DATE_PATTERNS_WITH_YEAR:
         match = pattern.search(text)
         if match:
             try:
@@ -80,7 +100,44 @@ def _parse_date_from_text(text: str) -> Optional[str]:
                     return datetime.strptime(date_str, fmt).strftime('%Y-%m-%d')
             except ValueError:
                 continue
+
+    # Try patterns without year (banking app screenshots)
+    if allow_no_year:
+        for pattern in DATE_PATTERNS_NO_YEAR:
+            match = pattern.search(text)
+            if match:
+                try:
+                    groups = match.groups()
+                    if len(groups) == 2:
+                        # Could be "Mar 14" or "03/14"
+                        try:
+                            # Try month name: "Mar 14"
+                            date_str = f"{groups[0]} {groups[1]} {current_year}"
+                            return datetime.strptime(date_str, '%b %d %Y').strftime('%Y-%m-%d')
+                        except ValueError:
+                            # Try numeric: "03/14"
+                            month = int(groups[0])
+                            day = int(groups[1])
+                            if 1 <= month <= 12 and 1 <= day <= 31:
+                                return f"{current_year}-{month:02d}-{day:02d}"
+                except (ValueError, IndexError):
+                    continue
+
     return None
+
+
+def _strip_date_from_line(line: str) -> str:
+    """Remove date patterns from a line to clean up descriptions."""
+    # Remove "Mar 14" / "March 14" style
+    cleaned = re.sub(
+        r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b',
+        '', line, flags=re.IGNORECASE
+    )
+    # Remove "03/14" style
+    cleaned = re.sub(r'\b\d{1,2}/\d{1,2}\b', '', cleaned)
+    # Remove "03/14/2026" style
+    cleaned = re.sub(r'\b\d{1,2}[/\-]\d{1,2}[/\-]\d{4}\b', '', cleaned)
+    return cleaned.strip()
 
 
 def _extract_merchant_name(lines: List[str]) -> Optional[str]:
@@ -120,14 +177,19 @@ def _detect_document_type(lines: List[str]) -> str:
     """
     dated_lines = 0
     amount_lines = 0
+    sign_lines = 0
     for line in lines:
         if AMOUNT_PATTERN.search(line):
             amount_lines += 1
-        if _parse_date_from_text(line) and AMOUNT_PATTERN.search(line):
+        # Check for +/- signs (banking app style)
+        if re.search(r'[+\-]\s*\$', line):
+            sign_lines += 1
+        if (_parse_date_from_text(line, allow_no_year=True) and
+                AMOUNT_PATTERN.search(line)):
             dated_lines += 1
 
-    # If many lines have both dates and amounts, it's likely a statement
-    if dated_lines >= 3:
+    # If many lines have dates+amounts or +/- signs, it's a statement
+    if dated_lines >= 3 or sign_lines >= 3:
         return "statement"
     return "receipt"
 
@@ -188,10 +250,13 @@ def _dedup_within_results(items: List[dict], doc_type: str) -> List[dict]:
         return items
 
     else:  # statement
-        # Remove exact duplicates (same amount + same date + similar description)
+        # Remove total/balance lines and exact duplicates
         seen = set()
         deduped = []
         for item in items:
+            # Skip balance/total lines in statements too
+            if item.get("_is_total"):
+                continue
             key = (item["amount"], item["date"], item["description"][:20].lower())
             if key not in seen:
                 seen.add(key)
@@ -212,12 +277,17 @@ def parse_amounts(text: str) -> List[dict]:
     # Extract merchant name (for receipts)
     merchant_name = _extract_merchant_name(lines) if doc_type == "receipt" else None
 
-    # Find global date
+    # Find global date (try with year first, then without)
     global_date = None
     for line in lines:
-        global_date = _parse_date_from_text(line)
+        global_date = _parse_date_from_text(line, allow_no_year=False)
         if global_date:
             break
+    if not global_date:
+        for line in lines:
+            global_date = _parse_date_from_text(line, allow_no_year=True)
+            if global_date:
+                break
     if not global_date:
         global_date = datetime.now().strftime('%Y-%m-%d')
 
@@ -232,8 +302,9 @@ def parse_amounts(text: str) -> List[dict]:
         if not amount_match:
             continue
 
-        # Parse amount
-        amount_str = amount_match.group(1).replace(',', '')
+        # Parse amount — group(1) is the +/- sign, group(2) is the number
+        sign = amount_match.group(1)  # '+', '-', or None
+        amount_str = amount_match.group(2).replace(',', '')
         try:
             amount_dollars = float(amount_str)
             amount_cents = round(amount_dollars * 100)
@@ -243,18 +314,41 @@ def parse_amounts(text: str) -> List[dict]:
         if amount_cents <= 0:
             continue
 
-        # Check if this is a total/subtotal line
+        # Check if this is a total/subtotal/balance line
         is_total = _is_total_line(line)
+
+        # Determine transaction type from sign and keywords
+        tx_type = "expense"
+        if sign == '+':
+            tx_type = "income"
+        elif sign == '-':
+            tx_type = "expense"
+        elif INCOME_KEYWORDS.search(line):
+            tx_type = "income"
 
         # Extract description
         description = line
         description = AMOUNT_PATTERN.sub('', description)
         description = description.replace('$', '').strip()
+        # Remove +/- signs from description
+        description = re.sub(r'^[+\-]\s*', '', description)
         description = re.sub(r'\s+', ' ', description).strip(' -:.')
 
         # Clean up total-keyword descriptions
         if is_total:
             description = TOTAL_KEYWORDS.sub('', description).strip(' -:.')
+
+        # Extract line-specific date (for statements, including no-year dates)
+        line_date = global_date
+        if doc_type == "statement":
+            parsed_date = _parse_date_from_text(line, allow_no_year=True)
+            if parsed_date:
+                line_date = parsed_date
+                # Remove date from description
+                description = _strip_date_from_line(description)
+
+        # Clean description
+        description = re.sub(r'\s+', ' ', description).strip(' -:.')
 
         if not description or len(description) < 2:
             if merchant_name and not is_total:
@@ -264,21 +358,11 @@ def parse_amounts(text: str) -> List[dict]:
             else:
                 description = "OCR extracted item"
 
-        # Extract line-specific date (for statements)
-        line_date = global_date
-        if doc_type == "statement":
-            parsed_date = _parse_date_from_text(line)
-            if parsed_date:
-                line_date = parsed_date
-                # Remove date from description
-                for pattern, _ in DATE_PATTERNS:
-                    description = pattern.sub('', description).strip(' -:.')
-
         results.append({
             "amount": amount_cents,
             "date": line_date,
             "description": description[:500],
-            "type": "expense",
+            "type": tx_type,
             "_is_total": is_total,
         })
 
