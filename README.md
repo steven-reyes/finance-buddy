@@ -11,7 +11,7 @@ A personal finance management web application that helps you track income, expen
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are.
 - **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load.
 - **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
-- **Screenshot/OCR Import** - Upload photos of receipts or bank statements. Tesseract OCR extracts text, regex heuristics parse dollar amounts, dates, and descriptions. Review and edit extracted transactions in an editable table before confirming import.
+- **Screenshot/OCR Import** - Upload photos of receipts, bank statements, or banking app screenshots. Tesseract OCR extracts text with image preprocessing (auto-rotate, contrast enhancement, dark mode inversion, upscaling). Smart parsing detects document type (receipt vs statement), filters totals/subtotals/tax/balance lines, handles round dollar amounts ($12, $1,200), signed amounts (-$82.40, +$2,600), and parenthesized negatives (82.40). Auto-detects income (deposits, "paid you") vs expenses. Deduplicates against existing transactions. Auto-suggests categories from history. Review and edit in an editable table before confirming.
 - **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
 - **Data Export** - Export transactions as CSV, full database as JSON, or download the raw SQLite backup file.
 - **19 Default Categories** - Pre-seeded expense categories (Rent, Groceries, Utilities, Transportation, Entertainment, Dining Out, Healthcare, Insurance, Subscriptions, Clothing, Education, Personal Care, Other) and income categories (Salary, Freelance, Interest/Dividends, Gifts, Refunds, Other Income). Add your own custom categories.
@@ -28,7 +28,8 @@ A personal finance management web application that helps you track income, expen
 | Uvicorn 0.32 | ASGI server |
 | python-multipart | File upload handling (CSV/image import) |
 | pytesseract 0.3.13 | Python wrapper for Tesseract OCR engine |
-| Pillow 11.0 | Image processing for OCR input |
+| Pillow 11.0 | Image processing (grayscale, contrast, rotation, dark mode inversion) |
+| numpy | Pixel brightness analysis for dark mode detection |
 
 ### Frontend
 | Technology | Purpose |
@@ -138,7 +139,7 @@ finance-buddy/
 │       │   ├── recurring_service.py
 │       │   ├── dashboard_service.py
 │       │   ├── csv_service.py
-│       │   └── ocr_service.py        # Tesseract OCR + regex parsing
+│       │   └── ocr_service.py        # Tesseract OCR + image preprocessing + smart parsing
 │       └── routes/                   # API endpoint definitions
 │           ├── categories.py
 │           ├── transactions.py
@@ -328,8 +329,16 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/ocr/status` | Check if Tesseract OCR is available on the system |
-| POST | `/api/ocr/upload` | Upload image (JPG/PNG), run OCR, return extracted transaction candidates |
+| POST | `/api/ocr/upload` | Upload image (JPG/PNG). Preprocesses (grayscale, contrast, auto-rotate, dark mode invert), runs OCR, detects document type (receipt/statement), parses amounts with dedup, auto-categorizes, flags duplicates |
 | POST | `/api/ocr/confirm` | Confirm and import edited transactions from OCR extraction |
+
+**Supported screenshot formats:**
+- Banking app screenshots (Chase, BofA, Wells Fargo, etc.) — handles `Mar 14` dates without year, +/- signed amounts, round dollars
+- Credit card statements — detects "Payment - Thank You" as income
+- Store receipts — filters subtotals/tax/totals, keeps line items only
+- Venmo/Cash App — "paid you" = income, "You paid" = expense
+- Dark mode screenshots — auto-inverts for OCR readability
+- Rotated phone photos — auto-corrects via EXIF data
 
 #### Data Export
 | Method | Path | Description |
@@ -363,8 +372,54 @@ All errors return a consistent envelope:
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
 | `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
-| `/import` | Import | Tabbed: CSV import (4-step wizard) and Screenshot/OCR import (3-step wizard) |
+| `/import` | Import | Tabbed: CSV import (4-step wizard for bank statement CSVs) and Screenshot/OCR import (3-step wizard for photos of receipts, bank screenshots, credit card statements) |
 | `/settings` | Settings | Tabbed: Categories, Recurring Templates, Tags, Data Export |
+
+## Screenshot/OCR Import Pipeline
+
+The OCR import processes uploaded images through a multi-stage pipeline:
+
+1. **Image Preprocessing**
+   - EXIF auto-rotation (corrects phone photo orientation)
+   - Grayscale conversion
+   - Contrast enhancement (1.5x) and sharpness enhancement (2.0x)
+   - Dark mode detection (if average brightness < 128, image is inverted)
+   - Low-res upscaling (images under 1000px width are enlarged)
+
+2. **Text Extraction**
+   - Tesseract OCR with `--oem 3 --psm 6` (assumes uniform block of text)
+
+3. **Document Type Detection**
+   - **Receipt**: Single merchant, line items with totals → keeps line items, filters totals/subtotals/tax
+   - **Statement**: Multiple dated transactions → preserves all, deduplicates identical entries
+
+4. **Amount Parsing**
+   - Standard: `$12.99`, `$1,234.56`
+   - Round dollars: `$12`, `$1,200` (no decimal required when `$` present)
+   - Signed: `-$82.40` (expense), `+$2,600.00` (income)
+   - Parenthesized: `(82.40)` treated as expense
+   - Without dollar sign: `12.99` (decimal required)
+
+5. **Income/Expense Detection**
+   - `+` sign → income
+   - `-` sign or `(amount)` → expense
+   - Keywords: "deposit", "payroll", "paid you", "refund" → income
+   - CC keywords: "Payment - Thank You", "autopay" → income (credit to account)
+   - Default: expense
+
+6. **Date Extraction**
+   - With year: `03/14/2026`, `2026-03-14`, `March 14, 2026`
+   - Without year: `Mar 14`, `03/14` (assumes current year — common in banking apps)
+   - Falls back to today's date if no date found
+
+7. **Deduplication**
+   - Within results: identical amount + date + description collapsed
+   - Against database: flags transactions matching existing entries (same amount within 3 days)
+
+8. **Auto-Categorization**
+   - Each extracted transaction is matched against past transaction descriptions
+   - Falls back to merchant name matching
+   - Suggested categories shown in the review UI (user can accept or change)
 
 ## UX Polish
 
