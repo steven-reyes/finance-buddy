@@ -6,7 +6,7 @@ A personal finance management web application that helps you track income, expen
 
 - **Dashboard** - At-a-glance view of net income, spending by category (donut chart), monthly income vs expense trends (bar chart), budget health, and recent transactions. Month picker for historical viewing. **Spending alerts** banner for near/over-budget categories. **Monthly insights** with auto-generated tips (spending changes, net status, goal progress). **Quick add** inline transaction form. **Upcoming bills** widget showing recurring expenses due in the next 7 days. **Month-over-month comparison** per-category spending deltas.
 - **Transaction Management** - Full CRUD for income and expense entries. Filter by type, category, tag, date range, and search text. Paginated list view with color-coded amounts. **Auto-categorize** suggests categories based on past transactions as you type descriptions. **Duplicate detection** warns when a similar transaction already exists (same amount within 3 days).
-- **Budget Tracking** - Set monthly spending limits per category. Visual progress bars turn green/yellow/red as you approach and exceed limits. Copy budgets forward month-to-month. **Smart Budget Wizard** auto-detects your income (from recurring templates or transaction history) and allocates budgets using proven frameworks (50/30/20, 70/20/10, 60/20/20, or custom percentages). Categories are pre-sorted into Needs/Wants/Savings tiers with editable amounts. Budget Summary Bar shows income vs budgeted vs remaining at a glance.
+- **Budget Tracking** - Set monthly spending limits per category. Visual progress bars turn green/yellow/red as you approach and exceed limits. Copy budgets forward month-to-month. **Smart Budget Wizard** auto-detects your income (from recurring templates or transaction history) and allocates budgets using proven frameworks (50/30/20, 70/20/10, 60/20/20, or custom percentages). Categories are pre-sorted into Needs/Wants/Savings tiers with editable amounts. Budget Summary Bar shows income vs budgeted vs remaining at a glance. **Auto-rebalancing** detects when your income changes (>5%) and offers one-click proportional scaling of all budgets. **Auto-budget for new months** — navigating to a month with no budgets auto-creates them using your saved framework, so you only need to set up once.
 - **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
 - **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
 - **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load. **Quick Setup Wizard** guides you through common income sources (salary, freelance) and expenses (rent, utilities, insurance, subscriptions like Netflix/Spotify with pre-filled prices) in a 3-step checklist flow. Shows net income summary before creating all templates at once.
@@ -375,7 +375,7 @@ All errors return a consistent envelope:
 | `/transactions` | Transactions | Filterable, searchable, paginated transaction list with add/edit/delete |
 | `/transactions/new` | Add Transaction | Form with type toggle, dollar amount, category, date, description, notes, tag selector, auto-categorize suggestions, duplicate detection warnings |
 | `/transactions/{id}/edit` | Edit Transaction | Same form pre-populated with existing data |
-| `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward, Smart Setup Wizard (income detection + framework selection + auto-allocation), Budget Summary Bar |
+| `/budgets` | Budgets | Month picker, budget cards with color-coded progress bars, add/copy-forward, Smart Setup Wizard (income detection + framework selection + auto-allocation), Budget Summary Bar, income change alert with one-click rebalance, auto-budget for new months |
 | `/investments` | Investments | Portfolio summary banner, investment account cards with gain/loss |
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
 | `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
@@ -386,7 +386,7 @@ All errors return a consistent envelope:
 
 Finance Buddy includes guided setup wizards that do the thinking for you. They work together as a pipeline:
 
-**Recurring Quick Setup** → sets up income/expenses → **Budget Smart Setup** → auto-allocates from income → **Dashboard** → tracks actual vs budget
+**Recurring Quick Setup** → sets up income/expenses → **Budget Smart Setup** → auto-allocates from income → **New months auto-budget** → **Income changes trigger rebalance** → **Dashboard** → tracks actual vs budget
 
 ### Recurring Transactions Quick Setup (Settings > Recurring)
 
@@ -417,6 +417,16 @@ Finance Buddy includes guided setup wizards that do the thinking for you. They w
    - All amounts editable. Running total vs income (green if under, red if over).
 
 Budget Summary Bar shows Monthly Income, Total Budgeted, Remaining, and Savings Target at a glance.
+
+### Smart Budget Lifecycle
+
+After initial setup, the budget system runs automatically:
+
+- **New month auto-budget**: When you navigate to a month with no budgets, the system auto-creates them using your saved framework (e.g., 50/30/20) and stored income. No need to re-run the wizard each month.
+- **Income change detection**: Compares your current detected income (from recurring templates) against the income used in your last budget setup. If it changes by more than 5%, a yellow alert banner appears.
+- **One-click rebalance**: The alert offers a "Rebalance Budgets" button that scales all budget amounts proportionally to the new income while keeping the same framework. For example, if income goes from $5,000 to $5,500 (+10%), all budgets increase by 10%.
+- **Framework persistence**: Your chosen framework (50/30/20, etc.) and tier percentages are saved locally, so rebalancing and auto-budget use the same methodology you originally selected.
+- **Manual override**: You can always dismiss the rebalance alert, manually edit individual budgets, or re-run the Smart Setup Wizard with different settings.
 
 ## Screenshot/OCR Import Pipeline
 
