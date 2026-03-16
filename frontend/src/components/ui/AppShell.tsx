@@ -20,9 +20,9 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100">
+    <div className="flex h-screen bg-[#0a0a0f] text-gray-100">
       {/* Mobile header */}
-      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 bg-gray-900 border-b border-gray-800 px-4 py-3 md:hidden">
+      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 bg-[#111118]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 md:hidden">
         <button
           onClick={() => setSidebarOpen(true)}
           className="p-1 text-gray-400 hover:text-gray-200 transition-colors"
@@ -30,34 +30,37 @@ export default function AppShell() {
         >
           <Menu size={22} />
         </button>
-        <h1 className="text-lg font-bold text-blue-400">Finance Buddy</h1>
+        <img src="/assets/logo.png" alt="Finance Buddy" className="h-7 w-auto rounded" />
       </div>
 
       {/* Backdrop overlay for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-60 bg-gray-900 border-r border-gray-800 flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[15.5rem] bg-[#111118] border-r border-white/[0.06] flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-5 border-b border-gray-800 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-blue-400">Finance Buddy</h1>
+        {/* Logo */}
+        <div className="px-4 py-4 border-b border-white/[0.06] flex items-center justify-between">
+          <img src="/assets/logo.png" alt="Finance Buddy" className="h-10 w-auto rounded-lg" />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1 text-gray-400 hover:text-gray-200 transition-colors md:hidden"
+            className="p-1 text-gray-500 hover:text-gray-200 transition-colors md:hidden"
             aria-label="Close menu"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
           {navItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
@@ -65,20 +68,30 @@ export default function AppShell() {
               end={to === '/'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-all duration-150 ${
                   isActive
-                    ? 'bg-blue-500/10 text-blue-400 font-medium'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                    ? 'bg-blue-500/10 text-blue-400 font-semibold shadow-sm shadow-blue-500/5'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]'
                 }`
               }
             >
-              <Icon size={18} />
+              <Icon size={17} className="transition-transform duration-150 group-hover:scale-105" />
               {label}
             </NavLink>
           ))}
         </nav>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-white/[0.06]">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] text-gray-500 font-mono tracking-wider uppercase">System Operational</span>
+          </div>
+        </div>
       </aside>
-      <main className="flex-1 overflow-auto pt-14 md:pt-0">
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto pt-14 md:pt-0 bg-[#0a0a0f]">
         <Outlet />
       </main>
     </div>
