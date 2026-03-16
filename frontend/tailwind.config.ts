@@ -10,10 +10,10 @@ export default {
         mono: ['DM Mono', 'JetBrains Mono', 'monospace'],
       },
       colors: {
-        void: '#f0f7ff',
-        surface: '#f8fafc',
-        card: '#edf5ff',
-        elevated: '#e8f1fc',
+        void: '#0D0D12',
+        surface: '#13131a',
+        card: '#1a1a24',
+        elevated: '#222230',
       },
       borderRadius: {
         '2xl': '1rem',

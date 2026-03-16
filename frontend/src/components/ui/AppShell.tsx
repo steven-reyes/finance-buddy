@@ -20,12 +20,12 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-[#f0f7ff] text-slate-800">
+    <div className="flex h-screen bg-[#0D0D12] text-gray-100">
       {/* Mobile header */}
-      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 py-3 md:hidden">
+      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 glass-surface border-b border-white/[0.06] px-4 py-3 md:hidden">
         <button
           onClick={() => setSidebarOpen(true)}
-          className="p-1 text-slate-500 hover:text-slate-700 transition-colors"
+          className="p-1 text-gray-400 hover:text-gray-200 transition-colors"
           aria-label="Open menu"
         >
           <Menu size={22} />
@@ -36,23 +36,23 @@ export default function AppShell() {
       {/* Backdrop overlay for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[15.5rem] bg-[#e8f1fc] border-r border-[#dbe8f4] flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[15.5rem] bg-[#13131a] border-r border-white/[0.06] flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo */}
-        <div className="px-4 py-3 border-b border-[#dbe8f4] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
           <img src="/assets/logo.png" alt="Finance Buddy" className="h-12 w-auto rounded-md" />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1 text-slate-400 hover:text-slate-600 transition-colors md:hidden"
+            className="p-1 text-gray-500 hover:text-gray-200 transition-colors md:hidden"
             aria-label="Close menu"
           >
             <X size={18} />
@@ -70,8 +70,8 @@ export default function AppShell() {
               className={({ isActive }) =>
                 `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-all duration-150 ${
                   isActive
-                    ? 'bg-sky-50 text-sky-600 font-semibold'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                    ? 'bg-[#C9A84C]/10 text-[#C9A84C] font-semibold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]'
                 }`
               }
             >
@@ -82,10 +82,10 @@ export default function AppShell() {
         </nav>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-[#dbe8f4]">
+        <div className="px-5 py-4 border-t border-white/[0.06]">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase">System Operational</span>
+            <span className="text-[10px] text-gray-500 font-mono tracking-wider uppercase">System Operational</span>
           </div>
         </div>
       </aside>

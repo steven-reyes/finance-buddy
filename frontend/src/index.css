@@ -4,22 +4,22 @@
 
 /* ─── Design Tokens ─────────────────────────────────── */
 :root {
-  --bg-base: #f0f7ff;
-  --bg-sidebar: #ffffff;
-  --bg-card: #ffffff;
-  --bg-elevated: #f8fafc;
-  --bg-input: #f1f5f9;
-  --border-subtle: #e2e8f0;
-  --border-medium: #cbd5e1;
-  --accent: #0ea5e9;
-  --accent-hover: #0284c7;
-  --accent-light: #e0f2fe;
-  --accent-green: #16a34a;
-  --accent-red: #dc2626;
-  --accent-yellow: #d97706;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --bg-base: #0D0D12;
+  --bg-sidebar: #13131a;
+  --bg-card: #1a1a24;
+  --bg-elevated: #222230;
+  --bg-input: #1e1e2a;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --accent: #C9A84C;
+  --accent-hover: #b8952f;
+  --accent-light: rgba(201, 168, 76, 0.1);
+  --accent-green: #4ade80;
+  --accent-red: #f87171;
+  --accent-yellow: #fbbf24;
+  --text-primary: #FAF8F5;
+  --text-secondary: #a1a1b5;
+  --text-muted: #6b6b80;
 }
 
 /* ─── Base ──────────────────────────────────────────── */
@@ -82,77 +82,76 @@ input:focus, select:focus, textarea:focus {
 
 table { font-variant-numeric: tabular-nums; }
 
-/* ─── Light Theme Text Overrides ────────────────────── */
-/* Remap dark-theme gray text classes to readable light-theme equivalents.
-   This ensures all pages are legible without editing every component. */
+/* ─── Midnight Luxe Theme Overrides ─────────────────── */
+/* Dark theme with champagne gold accents. All grays map to midnight tones. */
 @layer utilities {
-  .text-gray-100 { color: #0f172a !important; }  /* was near-white → now slate-900 */
-  .text-gray-200 { color: #1e293b !important; }  /* was light gray → now slate-800 */
-  .text-gray-300 { color: #334155 !important; }  /* was medium-light → now slate-700 */
-  .text-gray-400 { color: #475569 !important; }  /* was medium gray → now slate-600 */
-  .text-gray-500 { color: #64748b !important; }  /* stays readable as slate-500 */
+  /* Text — native dark theme, no remapping needed */
 
-  /* Background overrides for dark-theme remnants */
-  .bg-gray-900  { background-color: #edf5ff !important; }  /* card blue */
-  .bg-gray-800  { background-color: #e2edf8 !important; }  /* input/elevated blue */
-  .bg-gray-700  { background-color: #d5e3f0 !important; }  /* border-like blue */
-  .bg-gray-950  { background-color: #f0f7ff !important; }  /* base background */
+  /* Background overrides — midnight blue tones */
+  .bg-gray-900  { background-color: #1a1a24 !important; }
+  .bg-gray-800  { background-color: #222230 !important; }
+  .bg-gray-700  { background-color: #2a2a3a !important; }
+  .bg-gray-950  { background-color: #0D0D12 !important; }
 
-  /* Border overrides */
-  .border-gray-800 { border-color: #dbe8f4 !important; }
-  .border-gray-700 { border-color: #d0dfed !important; }
+  /* Border overrides — subtle white */
+  .border-gray-800 { border-color: rgba(255, 255, 255, 0.08) !important; }
+  .border-gray-700 { border-color: rgba(255, 255, 255, 0.12) !important; }
 
-  /* Active nav & accent states — keep blue tones */
-  .bg-blue-500\/10 { background-color: rgba(14, 165, 233, 0.1) !important; }
-  .text-blue-400 { color: #0284c7 !important; }  /* darker blue for light bg */
+  /* Accent — champagne gold */
+  .bg-blue-600 { background-color: #C9A84C !important; }
+  .bg-blue-600:hover, .hover\:bg-blue-700:hover { background-color: #b8952f !important; }
+  .text-blue-400 { color: #C9A84C !important; }
+  .bg-blue-500\/10 { background-color: rgba(201, 168, 76, 0.1) !important; }
 
-  /* Green/red amounts stay strong */
-  .text-green-400 { color: #16a34a !important; }
-  .text-red-400 { color: #dc2626 !important; }
-  .text-yellow-400 { color: #d97706 !important; }
+  /* Green/red for amounts */
+  .text-green-400 { color: #4ade80 !important; }
+  .text-red-400 { color: #f87171 !important; }
+  .text-yellow-400 { color: #fbbf24 !important; }
 
-  /* Button overrides */
-  .bg-blue-600 { background-color: #0ea5e9 !important; }
-  .bg-blue-600:hover, .hover\:bg-blue-700:hover { background-color: #0284c7 !important; }
+  /* Buttons */
   .bg-green-600 { background-color: #16a34a !important; }
   .bg-red-600 { background-color: #dc2626 !important; }
   .bg-purple-600 { background-color: #7c3aed !important; }
 
-  /* White text on colored buttons stays white */
   .text-white { color: #ffffff !important; }
 }
 
 /* ─── Light Theme Cards ─────────────────────────────── */
 @layer components {
   .glass-card {
-    background: #edf5ff;
-    border: 1px solid #dbe8f4;
+    background: rgba(26, 26, 36, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 1rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
   .glass-card-hover {
-    background: #edf5ff;
-    border: 1px solid #dbe8f4;
+    background: rgba(26, 26, 36, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 1rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
                 box-shadow 0.25s ease, border-color 0.25s ease;
   }
   .glass-card-hover:hover {
     transform: translateY(-2px);
-    border-color: #bdd4ea;
-    box-shadow: 0 8px 24px -8px rgba(14, 165, 233, 0.1), 0 4px 12px -4px rgba(0, 0, 0, 0.04);
+    border-color: rgba(201, 168, 76, 0.2);
+    box-shadow: 0 8px 32px -8px rgba(201, 168, 76, 0.12), 0 4px 16px -4px rgba(0, 0, 0, 0.3);
   }
   .glass-surface {
-    background: #e8f1fc;
-    border-right: 1px solid #dbe8f4;
+    background: rgba(19, 19, 26, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 }
 
 /* ─── Background ────────────────────────────────────── */
 .bg-mesh {
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(14, 165, 233, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 100%, rgba(16, 163, 127, 0.03) 0%, transparent 50%),
-    #f0f7ff;
+    radial-gradient(ellipse at 20% 0%, rgba(201, 168, 76, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.03) 0%, transparent 50%),
+    #0D0D12;
 }
