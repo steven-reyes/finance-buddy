@@ -67,12 +67,12 @@ export default function Dashboard() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-display font-bold">Dashboard</h1>
         <input
           type="month"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="bg-card border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -81,16 +81,16 @@ export default function Dashboard() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[1,2,3,4].map(i => (
-              <div key={i} className="h-28 bg-gray-800 rounded-xl animate-pulse" />
+              <div key={i} className="h-28 bg-card rounded-2xl animate-pulse" />
             ))}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-72 bg-gray-800 rounded-xl animate-pulse" />
-            <div className="h-72 bg-gray-800 rounded-xl animate-pulse" />
+            <div className="h-72 bg-card rounded-2xl animate-pulse" />
+            <div className="h-72 bg-card rounded-2xl animate-pulse" />
           </div>
         </div>
       ) : summary && summary.income === 0 && summary.expenses === 0 && summary.investment_value === 0 ? (
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-12 text-center">
+        <div className="bg-card rounded-2xl border border-white/[0.06] p-12 text-center">
           <p className="text-gray-400 mb-2">Welcome to Finance Buddy!</p>
           <p className="text-gray-500 text-sm mb-4">Add some transactions to see your financial overview.</p>
           <Link
@@ -144,15 +144,15 @@ export default function Dashboard() {
 
       {/* Feature 1: Monthly Insights — Collapsible Accordion */}
       {insights && insights.insights && insights.insights.length > 0 && (
-        <div className="bg-gray-900 rounded-xl border border-gray-800">
+        <div className="bg-card rounded-2xl border border-white/[0.06]">
           <button
             onClick={() => setInsightsOpen(!insightsOpen)}
-            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-800/50 transition-colors rounded-xl"
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-elevated/50 transition-colors rounded-2xl"
           >
             <div className="flex items-center gap-2">
               <Lightbulb size={18} className="text-yellow-400" />
-              <span className="text-sm font-semibold text-gray-200">Monthly Insights</span>
-              <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{insights.insights.length}</span>
+              <span className="text-sm font-display font-semibold text-gray-200">Monthly Insights</span>
+              <span className="text-xs bg-elevated text-gray-400 px-2 py-0.5 rounded-full">{insights.insights.length}</span>
             </div>
             <ChevronDown size={16} className={`text-gray-400 transition-transform ${insightsOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -179,10 +179,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Monthly Trends */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-          <h2 className="text-lg font-semibold mb-4">Monthly Trends</h2>
+        <div className="bg-card rounded-2xl border border-white/[0.06] p-5">
+          <h2 className="text-lg font-display font-semibold mb-4">Monthly Trends</h2>
           {loadingTrends ? (
-            <div className="h-[280px] bg-gray-800 rounded-lg animate-pulse" />
+            <div className="h-[280px] bg-elevated rounded-lg animate-pulse" />
           ) : trends && trends.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={trends.map(t => ({
@@ -211,10 +211,10 @@ export default function Dashboard() {
         </div>
 
         {/* Spending by Category */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-          <h2 className="text-lg font-semibold mb-4">Spending by Category</h2>
+        <div className="bg-card rounded-2xl border border-white/[0.06] p-5">
+          <h2 className="text-lg font-display font-semibold mb-4">Spending by Category</h2>
           {loadingSpending ? (
-            <div className="h-[240px] bg-gray-800 rounded-lg animate-pulse" />
+            <div className="h-[240px] bg-elevated rounded-lg animate-pulse" />
           ) : spending && spending.length > 0 ? (
             <div className="flex items-center gap-4">
               <ResponsiveContainer width="50%" height={240}>
@@ -266,13 +266,13 @@ export default function Dashboard() {
 
       {/* Month-over-Month Category Comparison */}
       {monthComparison && monthComparison.length > 0 && (
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+        <div className="bg-card rounded-2xl border border-white/[0.06] p-5">
           <div className="flex items-center gap-2 mb-4">
             <ArrowLeftRight size={20} className="text-purple-400" />
-            <h2 className="text-lg font-semibold">vs Last Month</h2>
+            <h2 className="text-lg font-display font-semibold">vs Last Month</h2>
           </div>
           <div className="space-y-2">
-            <div className="grid grid-cols-5 text-xs text-gray-500 pb-2 border-b border-gray-800">
+            <div className="grid grid-cols-5 text-[11px] text-gray-500 uppercase tracking-wider font-mono pb-2 border-b border-white/[0.06]">
               <span className="col-span-1">Category</span>
               <span className="text-right">This Month</span>
               <span className="text-right">Last Month</span>
@@ -308,12 +308,12 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Budget Health */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-          <h2 className="text-lg font-semibold mb-4">Budget Health</h2>
+        <div className="bg-card rounded-2xl border border-white/[0.06] p-5">
+          <h2 className="text-lg font-display font-semibold mb-4">Budget Health</h2>
           {loadingBudgets ? (
             <div className="space-y-3">
               {[1,2,3].map(i => (
-                <div key={i} className="h-10 bg-gray-800 rounded-lg animate-pulse" />
+                <div key={i} className="h-10 bg-elevated rounded-lg animate-pulse" />
               ))}
             </div>
           ) : budgetHealth && budgetHealth.length > 0 ? (
@@ -330,7 +330,7 @@ export default function Dashboard() {
                         {formatCents(b.spent)} / {formatCents(b.amount)} ({pct.toFixed(0)}%)
                       </span>
                     </div>
-                    <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${barColor}`}
                         style={{ width: `${Math.min(pct, 100)}%` }}
@@ -349,9 +349,9 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Transactions */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+        <div className="bg-card rounded-2xl border border-white/[0.06] p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Recent Transactions</h2>
+            <h2 className="text-lg font-display font-semibold">Recent Transactions</h2>
             <Link to="/transactions" className="text-sm text-blue-400 hover:underline">View all</Link>
           </div>
           {recentTxns && recentTxns.data.length > 0 ? (
@@ -386,10 +386,10 @@ export default function Dashboard() {
       </div>
 
       {/* Feature 4: Upcoming Bills Widget */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+      <div className="bg-card rounded-2xl border border-white/[0.06] p-5">
         <div className="flex items-center gap-2 mb-4">
           <Calendar size={20} className="text-blue-400" />
-          <h2 className="text-lg font-semibold">Upcoming Bills (Next 7 Days)</h2>
+          <h2 className="text-lg font-display font-semibold">Upcoming Bills (Next 7 Days)</h2>
         </div>
         {upcomingBills && upcomingBills.length > 0 ? (
           <div className="space-y-3">
@@ -401,7 +401,7 @@ export default function Dashboard() {
               return (
                 <div key={bill.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs">
+                    <div className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-xs">
                       {bill.category_icon || bill.category_name?.charAt(0) || '?'}
                     </div>
                     <div>
@@ -415,7 +415,7 @@ export default function Dashboard() {
                 </div>
               );
             })}
-            <div className="border-t border-gray-800 pt-3 flex justify-between text-sm">
+            <div className="border-t border-white/[0.06] pt-3 flex justify-between text-sm">
               <span className="text-gray-400">Total due</span>
               <span className="text-gray-200 font-medium">
                 {formatCents(upcomingBills.filter(b => b.type === 'expense').reduce((sum, b) => sum + b.amount, 0))}
@@ -428,7 +428,7 @@ export default function Dashboard() {
 
         {/* Feature 4: Debt Payments Due */}
         {upcomingDebtDue && upcomingDebtDue.length > 0 && (
-          <div className="border-t border-gray-800 pt-4 mt-4">
+          <div className="border-t border-white/[0.06] pt-4 mt-4">
             <div className="flex items-center gap-2 mb-3">
               <CreditCard size={16} className="text-red-400" />
               <h3 className="text-sm font-semibold text-gray-300">Debt Payments Due</h3>
@@ -490,7 +490,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={handleDismissPaycheck}
-              className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg transition-colors border border-gray-700"
+              className="px-4 py-2 text-sm bg-card hover:bg-elevated text-gray-400 rounded-lg transition-colors border border-white/[0.06]"
             >
               Dismiss
             </button>
@@ -512,16 +512,17 @@ function SummaryCard({
   color: string;
   bgColor: string;
 }) {
+  const accentBorder = color.includes('green') ? 'border-l-green-500' : color.includes('red') ? 'border-l-red-500' : color.includes('blue') ? 'border-l-blue-500' : 'border-l-yellow-500';
   return (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+    <div className={`bg-card rounded-2xl border border-white/[0.06] border-l-2 ${accentBorder} p-5 card-hover`}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-gray-400">{title}</span>
         <div className={`w-9 h-9 rounded-lg ${bgColor} ${color} flex items-center justify-center`}>
           {icon}
         </div>
       </div>
-      <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      <p className={`text-xs mt-1 ${positive ? 'text-green-400' : 'text-red-400'}`}>
+      <p className={`text-2xl font-display font-bold ${color}`}>{value}</p>
+      <p className={`font-mono text-xs mt-1 ${positive ? 'text-green-400' : 'text-red-400'}`}>
         {delta} vs last month
       </p>
     </div>
