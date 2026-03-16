@@ -22,7 +22,7 @@ export default function AppShell() {
   return (
     <div className="flex h-screen bg-void text-gray-100">
       {/* Mobile header */}
-      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 bg-[#111118]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 md:hidden">
+      <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 glass-surface border-b border-white/5 px-4 py-3 md:hidden">
         <button
           onClick={() => setSidebarOpen(true)}
           className="p-1 text-gray-400 hover:text-gray-200 transition-colors"
@@ -43,7 +43,7 @@ export default function AppShell() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[15.5rem] bg-[#111118] border-r border-white/[0.06] flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[15.5rem] glass-surface border-r border-white/[0.06] flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -91,7 +91,7 @@ export default function AppShell() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto pt-14 md:pt-0 bg-void">
+      <main className="flex-1 overflow-auto pt-14 md:pt-0 bg-void bg-mesh">
         <Outlet />
       </main>
     </div>
