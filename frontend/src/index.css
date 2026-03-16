@@ -1,3 +1,132 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Design Tokens ─────────────────────────────────── */
+:root {
+  --bg-void: #08080c;
+  --bg-surface: #0f0f14;
+  --bg-card: #141419;
+  --bg-elevated: #1a1a22;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.1);
+  --accent-blue: #3b82f6;
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --accent-yellow: #f59e0b;
+  --text-primary: #f0f0f5;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+}
+
+/* ─── Base ──────────────────────────────────────────── */
+body {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+}
+
+/* ─── Noise Texture Overlay ─────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── Headings ──────────────────────────────────────── */
+h1, h2, h3 {
+  font-family: 'Outfit', 'DM Sans', sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+
+/* ─── Monospace (data, numbers) ─────────────────────── */
+.font-mono {
+  font-family: 'DM Mono', 'JetBrains Mono', monospace !important;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ─── Selection ─────────────────────────────────────── */
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #fff;
+}
+
+/* ─── Focus Rings ───────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Micro-Interactions ────────────────────────────── */
+@layer utilities {
+  .card-hover {
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.2s ease,
+                border-color 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ─── Button Hover Feel ─────────────────────────────── */
+button, a {
+  transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              opacity 0.15s ease,
+              background-color 0.15s ease,
+              color 0.15s ease,
+              border-color 0.15s ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ─── Input Fields ──────────────────────────────────── */
+input, select, textarea {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* ─── Tables ────────────────────────────────────────── */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Number Display ────────────────────────────────── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

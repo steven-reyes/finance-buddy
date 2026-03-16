@@ -20,7 +20,7 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-[#0a0a0f] text-gray-100">
+    <div className="flex h-screen bg-void text-gray-100">
       {/* Mobile header */}
       <div className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 bg-[#111118]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 md:hidden">
         <button
@@ -91,7 +91,7 @@ export default function AppShell() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto pt-14 md:pt-0 bg-[#0a0a0f]">
+      <main className="flex-1 overflow-auto pt-14 md:pt-0 bg-void">
         <Outlet />
       </main>
     </div>
