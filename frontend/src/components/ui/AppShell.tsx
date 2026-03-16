@@ -48,8 +48,8 @@ export default function AppShell() {
         }`}
       >
         {/* Logo */}
-        <div className="px-4 py-4 border-b border-white/[0.06] flex items-center justify-between">
-          <img src="/assets/logo.png" alt="Finance Buddy" className="w-full max-w-[180px] h-auto rounded-lg" />
+        <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+          <img src="/assets/logo.png" alt="Finance Buddy" className="h-12 w-auto rounded-md" />
           <button
             onClick={() => setSidebarOpen(false)}
             className="p-1 text-gray-500 hover:text-gray-200 transition-colors md:hidden"
