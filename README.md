@@ -124,8 +124,8 @@ finance-buddy/
 │       ├── migrations/
 │       │   ├── 001_initial.sql       # Full database schema (12 tables)
 │       │   ├── 002_ocr_confirmed_status.sql  # Add 'confirmed' status to ocr_uploads
-│       │   └── 003_debts.sql                # Debts + debt_payments tables
-│       │   └── 004_simplefin.sql      # SimpleFIN connections, linked accounts, synced transactions
+│       │   ├── 003_debts.sql                # Debts + debt_payments tables
+│       │   └── 004_simplefin.sql            # SimpleFIN connections, linked accounts, synced transactions
 │       ├── models/                   # Pydantic models for validation
 │       │   ├── category.py
 │       │   ├── transaction.py
@@ -135,8 +135,8 @@ finance-buddy/
 │       │   ├── tag.py
 │       │   ├── recurring.py
 │       │   ├── dashboard.py
-│       │   └── debt.py               # Debt + DebtPayment + PaycheckAllocation models
-│       │   └── simplefin.py           # SimpleFIN connection, account, transaction models
+│       │   ├── debt.py               # Debt + DebtPayment + PaycheckAllocation models
+│       │   └── simplefin.py          # SimpleFIN connection, account, transaction models
 │       ├── services/                 # Business logic and SQL queries
 │       │   ├── category_service.py
 │       │   ├── transaction_service.py
@@ -148,8 +148,8 @@ finance-buddy/
 │       │   ├── dashboard_service.py
 │       │   ├── csv_service.py
 │       │   ├── ocr_service.py        # Tesseract OCR + image preprocessing + smart parsing
-│       │   └── debt_service.py       # Debt CRUD, payoff calculator, paycheck allocator
-│       │   └── simplefin_service.py   # SimpleFIN API client, sync, import
+│       │   ├── debt_service.py       # Debt CRUD, payoff calculator, paycheck allocator
+│       │   └── simplefin_service.py  # SimpleFIN API client, sync, import
 │       └── routes/                   # API endpoint definitions
 │           ├── categories.py
 │           ├── transactions.py
@@ -186,8 +186,8 @@ finance-buddy/
 │       │   ├── useTags.ts
 │       │   ├── useRecurring.ts
 │       │   ├── useDashboard.ts
-│       │   └── useDebts.ts           # Debt CRUD, payments, summary, payoff, allocate hooks
-│       │   ├── useSimpleFin.ts           # Bank sync hooks (connect, sync, import)
+│       │   ├── useDebts.ts           # Debt CRUD, payments, summary, payoff, allocate hooks
+│       │   └── useSimpleFin.ts      # Bank sync hooks (connect, sync, import)
 │       ├── lib/
 │       │   ├── api.ts                # Axios instance with error interceptor
 │       │   └── format.ts            # formatCents, formatDate, toCents, toDollars
@@ -201,8 +201,8 @@ finance-buddy/
 │       │   ├── tag.ts
 │       │   ├── recurring.ts
 │       │   ├── dashboard.ts
-│       │   └── debt.ts               # Debt, DebtPayment, DebtSummary, PayoffPlan, PaycheckAllocation
-│       │   └── simplefin.ts              # SimpleFIN connection, account, transaction types
+│       │   ├── debt.ts               # Debt, DebtPayment, DebtSummary, PayoffPlan, PaycheckAllocation
+│       │   └── simplefin.ts         # SimpleFIN connection, account, transaction types
 │       └── pages/                    # Route-level page components
 │           ├── Dashboard.tsx
 │           ├── Transactions.tsx
@@ -227,7 +227,7 @@ finance-buddy/
 
 ## Database Schema
 
-SQLite database with 12 tables:
+SQLite database with 18 tables:
 
 | Table | Purpose |
 |-------|---------|
@@ -646,7 +646,7 @@ Connect your bank accounts to automatically sync transactions using [SimpleFIN B
 - Backend binds to `127.0.0.1` only (not accessible from network)
 - No authentication (personal local app, not exposed to internet)
 - All data stored in a local SQLite file
-- No external API calls or cloud services
+- No external API calls except SimpleFIN Bridge (optional, for bank sync only)
 - No telemetry or analytics
 
 ## Data Storage
