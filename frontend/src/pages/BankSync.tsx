@@ -204,7 +204,7 @@ function SetupView() {
           {setup.isError && (
             <div className="flex items-center gap-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
               <AlertTriangle size={14} />
-              {(setup.error as Error)?.message ?? 'Failed to connect. Check your token and try again.'}
+              {(setup.error as any)?.response?.data?.detail ?? (setup.error as Error)?.message ?? 'Failed to connect. Check your token and try again.'}
             </div>
           )}
 
@@ -339,7 +339,7 @@ function ConnectedView() {
                 <StatusBadge status={connection.status} />
                 {connection.last_synced && (
                   <span className="text-xs text-[#6b6b80]">
-                    Last synced {formatDate(connection.last_synced)}
+                    Last synced {formatDate(connection.last_synced.split(' ')[0])}
                   </span>
                 )}
               </div>

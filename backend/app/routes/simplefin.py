@@ -13,7 +13,10 @@ def get_status():
     result = simplefin_service.get_connection_status()
     if not result:
         return {"connection": None, "account_count": 0}
-    return result
+    account_count = result.pop("account_count", 0)
+    result.pop("access_url", None)
+    result.pop("setup_token", None)
+    return {"connection": result, "account_count": account_count}
 
 
 @router.post("/setup", status_code=201)
