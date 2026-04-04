@@ -4,19 +4,19 @@ A personal finance management web application that helps you track income, expen
 
 ## Features
 
-- **Dashboard** - At-a-glance view of net income, spending by category (donut chart), monthly income vs expense trends (bar chart), budget health, and recent transactions. Month picker for historical viewing. **Spending alerts** banner for near/over-budget categories. **Monthly insights** with auto-generated tips (spending changes, net status, goal progress). **Quick add** inline transaction form. **Upcoming bills** widget showing recurring expenses due in the next 7 days. **Month-over-month comparison** per-category spending deltas.
-- **Transaction Management** - Full CRUD for income and expense entries. Filter by type, category, tag, date range, and search text. Paginated list view with color-coded amounts. **Quick date presets** (Today, This Week, This Month, Last 30 Days, Last Month, All Time). **Filtered summary bar** showing total income/expenses/net for the current view. **Column sorting** — click Date, Description, Category, or Amount headers to sort. **Bulk select + delete** with checkboxes and select-all. **Export filtered CSV** downloads exactly what you're viewing. **Recurring badges** mark auto-generated transactions with a repeat icon. **Auto-categorize** suggests categories based on past transactions as you type descriptions. **Duplicate detection** warns when a similar transaction already exists (same amount within 3 days).
-- **Budget Tracking** - Set monthly spending limits per category. Visual progress bars turn green/yellow/red as you approach and exceed limits. Copy budgets forward month-to-month. **Smart Budget Wizard** auto-detects your income (from recurring templates or transaction history) and allocates budgets using proven frameworks (50/30/20, 70/20/10, 60/20/20, or custom percentages). Categories are pre-sorted into Needs/Wants/Savings tiers with editable amounts. Budget Summary Bar shows income vs budgeted vs remaining at a glance. **Auto-rebalancing** detects when your income changes (>5%) and offers one-click proportional scaling of all budgets. **Auto-budget for new months** — navigating to a month with no budgets auto-creates them using your saved framework, so you only need to set up once.
-- **Investment Tracking** - Track investment accounts (401k, IRA, brokerage, HSA, crypto). Update values to create historical snapshots. View portfolio summary and per-account value history charts.
-- **Savings Goals** - Create goals with target amounts and deadlines. Track contributions with an audit trail. Progress bars show how close you are. 10 preset goal categories (Emergency Fund, Vacation, Down Payment, Car, Education, Wedding, Home Improvement, Debt Payoff, Retirement, Custom) with auto-assigned icons and colors.
-- **Recurring Transactions** - Define templates for salary, rent, subscriptions, etc. The system auto-generates transactions on server startup and dashboard load. **Quick Setup Wizard** guides you through common income sources (salary, freelance) and expenses (rent, utilities, insurance, subscriptions like Netflix/Spotify with pre-filled prices) in a 3-step checklist flow. Shows net income summary before creating all templates at once.
-- **Debt Tracker** - Track all debts: cash advances (Chime, Dave), personal loans (friends, family), credit cards, overdue bills (rent, utilities), medical, and other. Auto-assigns priority (housing=1, advance=2, loan=3, credit card=4, personal=5). Log payments to reduce balances — auto-marks as paid off when balance reaches zero. **Paycheck Planner** shows a waterfall visualization of where every dollar goes in priority order (auto-deductions first, then housing, utilities, minimums, essentials for food/transport, extra debt payment, buffer) with shortfall warnings when the paycheck doesn't cover all obligations. **Payoff calculator** with avalanche (highest interest first) and snowball (smallest balance first) strategies showing estimated debt-free date. **Smart insights**: debt-to-income ratio, advance cycle cost, housing risk alerts. **Interactive**: expenses auto-match to debt creditors for one-click payment logging, "What if" simulator for exploring extra payment scenarios, paycheck arrival prompts on dashboard, due date alerts with urgency color-coding. **Motivational**: debt balance over time chart (see the line go down), progress banner with payoff percentage, celebration banners when debts hit $0, debt-free countdown ("X months until debt-free"), exportable/printable debt report for sharing with case workers or personal records.
-- **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
-- **Screenshot/OCR Import** - Upload photos of receipts, bank statements, or banking app screenshots. Tesseract OCR extracts text with image preprocessing (auto-rotate, contrast enhancement, dark mode inversion, upscaling). Smart parsing detects document type (receipt vs statement), filters totals/subtotals/tax/balance lines, handles round dollar amounts ($12, $1,200), signed amounts (-$82.40, +$2,600), and parenthesized negatives (82.40). Auto-detects income (deposits, "paid you") vs expenses. Deduplicates against existing transactions. Auto-suggests categories from history. Review and edit in an editable table before confirming.
-- **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
-- **Bank Sync (SimpleFIN)** - Connect your bank accounts via SimpleFIN Bridge ($1.50/month paid directly to SimpleFIN). Automatically sync account balances and transactions. Review synced transactions in a staging area, then selectively import individual or bulk-import all into your main transaction list with auto-categorization. View linked account balances. Disconnect at any time.
-- **Data Export** - Export transactions as CSV, full database as JSON, or download the raw SQLite backup file.
-- **19 Default Categories** - Pre-seeded expense categories (Rent, Groceries, Utilities, Transportation, Entertainment, Dining Out, Healthcare, Insurance, Subscriptions, Clothing, Education, Personal Care, Other) and income categories (Salary, Freelance, Interest/Dividends, Gifts, Refunds, Other Income). Add your own custom categories.
+- **Dashboard** - Net income, spending by category, monthly trends, budget health, recent transactions, upcoming bills, and monthly insights — all at a glance with a month picker.
+- **Transaction Management** - Full CRUD with filtering, sorting, search, bulk actions, CSV export, auto-categorization, and duplicate detection.
+- **Budget Tracking** - Monthly spending limits per category with Smart Budget Wizard (50/30/20, 70/20/10, or custom frameworks), auto-rebalancing on income changes, and auto-budget for new months.
+- **Investment Tracking** - Track 401k, IRA, brokerage, HSA, and crypto accounts with value snapshots and portfolio summary charts.
+- **Savings Goals** - Target-based savings with progress bars, contribution tracking, and 10 preset goal categories.
+- **Recurring Transactions** - Auto-generated transactions from templates (salary, rent, subscriptions) with a Quick Setup Wizard for common income and expenses.
+- **Debt Tracker** - Track all debts with auto-priority, paycheck planner, avalanche/snowball payoff strategies, "What if" simulator, balance charts, celebrations, and exportable reports.
+- **CSV Import** - 4-step wizard: upload, map columns, preview with duplicate warnings, confirm.
+- **Screenshot/OCR Import** - Upload photos of receipts or bank screenshots. OCR extracts transactions with smart parsing, auto-categorization, and deduplication.
+- **Tags** - Custom tags for transactions (e.g., "tax-deductible", "shared-expense") with tag-based filtering.
+- **Bank Sync (SimpleFIN)** - Connect your bank via SimpleFIN Bridge ($1.50/mo). Sync accounts and transactions, review in a staging area, then import with auto-categorization.
+- **Data Export** - Export transactions as CSV, full database as JSON, or download the raw SQLite backup.
+- **19 Default Categories** - Pre-seeded expense and income categories with colors and icons. Add your own custom categories.
 
 ## Tech Stack
 
@@ -259,170 +259,10 @@ SQLite database with 18 tables:
 
 ## API Reference
 
-The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-generates interactive docs at:
+See **[API.md](API.md)** for the full endpoint reference, or use the auto-generated interactive docs:
 
 - **Swagger UI:** http://127.0.0.1:3001/docs
 - **ReDoc:** http://127.0.0.1:3001/redoc
-
-### Endpoints Summary
-
-#### Categories
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/categories` | List all (optional `?type=income\|expense`) |
-| POST | `/api/categories` | Create category |
-| PUT | `/api/categories/{id}` | Update category |
-| DELETE | `/api/categories/{id}` | Delete (non-default only) |
-
-#### Transactions
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/transactions` | List with filters: `type`, `category_id`, `tag_id`, `start_date`, `end_date`, `search`, `page`, `limit`, `sort_by` (date/amount/description/category), `sort_order` (asc/desc). Returns `filtered_income`, `filtered_expenses`, `filtered_net` totals. |
-| GET | `/api/transactions/{id}` | Get single with category info and tags |
-| POST | `/api/transactions` | Create (amount in cents, `tag_ids` optional) |
-| PUT | `/api/transactions/{id}` | Update |
-| DELETE | `/api/transactions/{id}` | Delete |
-| POST | `/api/transactions/bulk` | Bulk create (used by CSV/OCR import) |
-| POST | `/api/transactions/{id}/tags` | Set tags for a transaction (replaces existing) |
-| GET | `/api/transactions/suggest-category?description=...` | Auto-suggest category based on past transactions with similar descriptions. Returns category with confidence level (high/medium) |
-| GET | `/api/transactions/check-duplicates?amount=&description=&date=` | Check for potential duplicate transactions (same amount + similar description within 3 days) |
-| POST | `/api/transactions/bulk-delete` | Bulk delete transactions by ID list. Body: `[id1, id2, ...]` |
-
-#### Budgets
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/budgets?month=YYYY-MM` | List for month with spending calculations |
-| POST | `/api/budgets` | Create budget |
-| PUT | `/api/budgets/{id}` | Update limit or threshold |
-| DELETE | `/api/budgets/{id}` | Delete |
-| POST | `/api/budgets/bulk` | Bulk create budgets for a month (used by Smart Budget Wizard). Body: `{ month, budgets: [{ category_id, limit_amount }] }` |
-| POST | `/api/budgets/copy-forward` | Auto-detect most recent month with budgets and copy to `{ target_month }` |
-
-#### Investments
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/investments` | List all accounts |
-| GET | `/api/investments/{id}` | Get with recent snapshots |
-| POST | `/api/investments` | Create account |
-| PUT | `/api/investments/{id}` | Update details |
-| PUT | `/api/investments/{id}/value` | Update value (creates snapshot) |
-| DELETE | `/api/investments/{id}` | Delete with snapshots |
-| GET | `/api/investments/{id}/snapshots` | Value history |
-| GET | `/api/investments/summary` | Portfolio totals |
-
-#### Savings Goals
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/savings-goals` | List all with computed progress |
-| POST | `/api/savings-goals` | Create goal |
-| PUT | `/api/savings-goals/{id}` | Update goal |
-| DELETE | `/api/savings-goals/{id}` | Delete (cascades contributions) |
-| GET | `/api/savings-goals/{id}/contributions` | List contributions |
-| POST | `/api/savings-goals/{id}/contributions` | Add contribution |
-| DELETE | `/api/savings-goals/{id}/contributions/{cid}` | Remove contribution |
-
-#### Tags
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/tags` | List all |
-| POST | `/api/tags` | Create tag |
-| PUT | `/api/tags/{id}` | Update name/color |
-| DELETE | `/api/tags/{id}` | Delete (cascades) |
-
-#### Recurring Templates
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/recurring` | List all templates |
-| POST | `/api/recurring` | Create template |
-| PUT | `/api/recurring/{id}` | Update template |
-| DELETE | `/api/recurring/{id}` | Delete (generated transactions remain) |
-| POST | `/api/recurring/generate` | Manually trigger generation |
-| POST | `/api/recurring/bulk` | Bulk create templates (used by Quick Setup Wizard). Body: `{ templates: [{ type, amount, description, category_id, frequency, start_date }] }` |
-
-#### Dashboard
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/dashboard/summary?month=YYYY-MM` | Income, expenses, net, transaction count |
-| GET | `/api/dashboard/spending-by-category?month=YYYY-MM` | Expense breakdown with percentages |
-| GET | `/api/dashboard/monthly-trends?months=6` | Last N months income vs expenses |
-| GET | `/api/dashboard/budget-health?month=YYYY-MM` | Budget progress with status |
-| GET | `/api/dashboard/detect-income` | Auto-detect monthly income from recurring templates (monthly/biweekly/weekly/yearly) or average of last 3 months of income transactions |
-| GET | `/api/dashboard/month-comparison?month=YYYY-MM` | Per-category spending comparison vs previous month with change amounts and percentages |
-| GET | `/api/dashboard/insights?month=YYYY-MM` | Auto-generated insights: net status, category spending changes, budget tracking, savings goal progress |
-
-#### CSV Import
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/csv/upload` | Upload CSV file, returns headers + preview rows |
-| POST | `/api/csv/confirm` | Apply column mapping and bulk insert |
-
-#### Debts
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/debts` | List all debts (optional `?status=active\|paid_off\|paused`), ordered by priority |
-| GET | `/api/debts/summary` | Total owed, minimum monthly, interest cost, debts by priority |
-| GET | `/api/debts/payoff-plan?strategy=avalanche\|snowball` | Payoff timeline with estimated debt-free date per strategy |
-| POST | `/api/debts/allocate` | Paycheck allocation in priority order. Body: `{ paycheck_amount, pay_date }`. Returns waterfall with shortfall warnings |
-| GET | `/api/debts/insights` | Smart tips: debt-to-income ratio, advance cycle cost, housing risk alerts |
-| GET | `/api/debts/match-creditor?description=...` | Match expense description to active debt creditor for auto-linking payments |
-| GET | `/api/debts/simulate?extra_monthly=X&strategy=Y` | "What if" payoff simulation with extra monthly payment |
-| GET | `/api/debts/upcoming-due?days=7` | Debts with due dates in the next N days, sorted by urgency |
-| GET | `/api/debts/balance-history` | Total debt balance over time (for progress chart) |
-| GET | `/api/debts/progress` | Payoff progress: total paid, percentage, paid-off count, countdown, recently paid-off |
-| GET | `/api/debts/report` | Full exportable report: summary, progress, payoff plan, all debts with payment histories |
-| GET | `/api/debts/{id}` | Single debt with payment history |
-| POST | `/api/debts` | Create debt (auto-assigns priority from type) |
-| PUT | `/api/debts/{id}` | Update debt (balance, status, priority, etc.) |
-| DELETE | `/api/debts/{id}` | Delete debt (cascades payments) |
-| POST | `/api/debts/{id}/payments` | Log a payment (reduces balance, auto-marks paid_off at zero) |
-| GET | `/api/debts/{id}/payments` | List payment history for a debt |
-
-#### OCR Import
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/ocr/status` | Check if Tesseract OCR is available on the system |
-| POST | `/api/ocr/upload` | Upload image (JPG/PNG). Preprocesses (grayscale, contrast, auto-rotate, dark mode invert), runs OCR, detects document type (receipt/statement), parses amounts with dedup, auto-categorizes, flags duplicates |
-| POST | `/api/ocr/confirm` | Confirm and import edited transactions from OCR extraction |
-
-**Supported screenshot formats:**
-- Banking app screenshots (Chase, BofA, Wells Fargo, etc.) — handles `Mar 14` dates without year, +/- signed amounts, round dollars
-- Credit card statements — detects "Payment - Thank You" as income
-- Store receipts — filters subtotals/tax/totals, keeps line items only
-- Venmo/Cash App — "paid you" = income, "You paid" = expense
-- Dark mode screenshots — auto-inverts for OCR readability
-- Rotated phone photos — auto-corrects via EXIF data
-
-#### SimpleFIN Bank Sync
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/simplefin/status` | Connection status and account count |
-| POST | `/api/simplefin/setup` | Connect with setup token from SimpleFIN Bridge. Body: `{ "setup_token": "..." }` |
-| POST | `/api/simplefin/sync` | Trigger manual sync of accounts and transactions from SimpleFIN |
-| GET | `/api/simplefin/accounts` | List linked bank accounts with balances |
-| GET | `/api/simplefin/transactions` | List synced transactions. Query params: `account_id`, `imported` (bool), `start_date`, `end_date`, `page`, `per_page` |
-| POST | `/api/simplefin/import` | Import a single synced transaction. Body: `{ "transaction_id": 1, "category_id": null }` |
-| POST | `/api/simplefin/import-all` | Bulk import all unimported transactions. Body: `{ "account_id": null, "default_category_id": null }` |
-| DELETE | `/api/simplefin/connections/{id}` | Disconnect a SimpleFIN connection |
-
-#### Data Export
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/export/transactions?format=csv` | Export transactions as CSV. Supports optional filters: `type`, `category_id`, `start_date`, `end_date`, `search` |
-| GET | `/api/export/all?format=json` | Export entire database as JSON (all tables including csv_imports, ocr_uploads) |
-| GET | `/api/export/backup` | Download raw SQLite file |
-
-### Error Response Format
-
-All errors return a consistent envelope:
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Description of what went wrong"
-  }
-}
-```
 
 ## Frontend Pages
 
