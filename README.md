@@ -2,6 +2,28 @@
 
 A personal finance management web application that helps you track income, expenses, investments, and savings goals to maintain a net-positive monthly balance. All data is stored locally on your machine for maximum privacy.
 
+> **Not a developer?** See the **[Client Setup Guide](CLIENTS.md)** for a streamlined walkthrough without the technical details.
+
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Database Schema](#database-schema)
+- [API Reference](#api-reference)
+- [Frontend Pages](#frontend-pages)
+- [Debt Tracker & Paycheck Planner](#debt-tracker--paycheck-planner)
+- [Smart Setup Wizards](#smart-setup-wizards)
+- [Screenshot/OCR Import Pipeline](#screenshotocr-import-pipeline)
+- [Bank Sync (SimpleFIN)](#bank-sync-simplefin)
+- [UX Polish](#ux-polish)
+- [Security](#security)
+- [Data Storage](#data-storage)
+- [Development](#development)
+- [License](#license)
+
 ## Features
 
 - **Dashboard** - Net income, spending by category, monthly trends, budget health, recent transactions, upcoming bills, and monthly insights — all at a glance with a month picker.
