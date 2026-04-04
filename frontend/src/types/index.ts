@@ -17,3 +17,10 @@ export type {
   MonthlyTrend,
   BudgetHealth,
 } from './dashboard';
+export type {
+  SimpleFinConnection,
+  LinkedAccount,
+  SyncedTransaction,
+  SyncResult,
+  PaginatedSyncedTransactions,
+} from './simplefin';

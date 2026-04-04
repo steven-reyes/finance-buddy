@@ -8,6 +8,7 @@ import Investments from './pages/Investments';
 import InvestmentDetail from './pages/InvestmentDetail';
 import SavingsGoals from './pages/SavingsGoals';
 import Debts from './pages/Debts';
+import BankSync from './pages/BankSync';
 import Import from './pages/Import';
 import Settings from './pages/Settings';
 
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/investments/:id" element={<InvestmentDetail />} />
         <Route path="/savings-goals" element={<SavingsGoals />} />
         <Route path="/debts" element={<Debts />} />
+        <Route path="/bank-sync" element={<BankSync />} />
         <Route path="/import" element={<Import />} />
         <Route path="/settings" element={<Settings />} />
       </Route>

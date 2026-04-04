@@ -14,6 +14,7 @@ A personal finance management web application that helps you track income, expen
 - **CSV Import** - 4-step wizard: upload file, map columns (supports debit/credit splits, date format detection, amount parsing), preview with duplicate warnings, confirm.
 - **Screenshot/OCR Import** - Upload photos of receipts, bank statements, or banking app screenshots. Tesseract OCR extracts text with image preprocessing (auto-rotate, contrast enhancement, dark mode inversion, upscaling). Smart parsing detects document type (receipt vs statement), filters totals/subtotals/tax/balance lines, handles round dollar amounts ($12, $1,200), signed amounts (-$82.40, +$2,600), and parenthesized negatives (82.40). Auto-detects income (deposits, "paid you") vs expenses. Deduplicates against existing transactions. Auto-suggests categories from history. Review and edit in an editable table before confirming.
 - **Tags** - Create custom tags (e.g., "tax-deductible", "shared-expense") and assign them to transactions. Filter transactions by tag.
+- **Bank Sync (SimpleFIN)** - Connect your bank accounts via SimpleFIN Bridge ($1.50/month paid directly to SimpleFIN). Automatically sync account balances and transactions. Review synced transactions in a staging area, then selectively import individual or bulk-import all into your main transaction list with auto-categorization. View linked account balances. Disconnect at any time.
 - **Data Export** - Export transactions as CSV, full database as JSON, or download the raw SQLite backup file.
 - **19 Default Categories** - Pre-seeded expense categories (Rent, Groceries, Utilities, Transportation, Entertainment, Dining Out, Healthcare, Insurance, Subscriptions, Clothing, Education, Personal Care, Other) and income categories (Salary, Freelance, Interest/Dividends, Gifts, Refunds, Other Income). Add your own custom categories.
 
@@ -31,6 +32,7 @@ A personal finance management web application that helps you track income, expen
 | pytesseract 0.3.13 | Python wrapper for Tesseract OCR engine |
 | Pillow 11.0 | Image processing (grayscale, contrast, rotation, dark mode inversion) |
 | numpy | Pixel brightness analysis for dark mode detection |
+| requests | HTTP client for SimpleFIN API integration |
 
 ### Frontend
 | Technology | Purpose |
@@ -58,6 +60,7 @@ A personal finance management web application that helps you track income, expen
   - macOS: `brew install tesseract`
   - Windows: [Download installer](https://github.com/UB-Mannheim/tesseract/wiki)
   - The app works without Tesseract — the screenshot import tab will show install instructions if it's missing
+- **SimpleFIN Bridge** (optional, for bank sync) - [$1.50/month](https://beta-bridge.simplefin.org/) paid directly to SimpleFIN. Sign up, add your bank, and copy the setup token to connect.
 
 ## Quick Start
 
@@ -122,6 +125,7 @@ finance-buddy/
 │       │   ├── 001_initial.sql       # Full database schema (12 tables)
 │       │   ├── 002_ocr_confirmed_status.sql  # Add 'confirmed' status to ocr_uploads
 │       │   └── 003_debts.sql                # Debts + debt_payments tables
+│       │   └── 004_simplefin.sql      # SimpleFIN connections, linked accounts, synced transactions
 │       ├── models/                   # Pydantic models for validation
 │       │   ├── category.py
 │       │   ├── transaction.py
@@ -132,6 +136,7 @@ finance-buddy/
 │       │   ├── recurring.py
 │       │   ├── dashboard.py
 │       │   └── debt.py               # Debt + DebtPayment + PaycheckAllocation models
+│       │   └── simplefin.py           # SimpleFIN connection, account, transaction models
 │       ├── services/                 # Business logic and SQL queries
 │       │   ├── category_service.py
 │       │   ├── transaction_service.py
@@ -144,6 +149,7 @@ finance-buddy/
 │       │   ├── csv_service.py
 │       │   ├── ocr_service.py        # Tesseract OCR + image preprocessing + smart parsing
 │       │   └── debt_service.py       # Debt CRUD, payoff calculator, paycheck allocator
+│       │   └── simplefin_service.py   # SimpleFIN API client, sync, import
 │       └── routes/                   # API endpoint definitions
 │           ├── categories.py
 │           ├── transactions.py
@@ -156,6 +162,7 @@ finance-buddy/
 │           ├── csv_import.py
 │           ├── ocr.py                # Screenshot/image OCR import
 │           ├── debts.py              # Debt tracker + paycheck planner
+│           ├── simplefin.py           # Bank sync via SimpleFIN Bridge
 │           └── export.py
 ├── frontend/                         # React/TypeScript frontend
 │   ├── package.json
@@ -180,6 +187,7 @@ finance-buddy/
 │       │   ├── useRecurring.ts
 │       │   ├── useDashboard.ts
 │       │   └── useDebts.ts           # Debt CRUD, payments, summary, payoff, allocate hooks
+│       │   ├── useSimpleFin.ts           # Bank sync hooks (connect, sync, import)
 │       ├── lib/
 │       │   ├── api.ts                # Axios instance with error interceptor
 │       │   └── format.ts            # formatCents, formatDate, toCents, toDollars
@@ -194,6 +202,7 @@ finance-buddy/
 │       │   ├── recurring.ts
 │       │   ├── dashboard.ts
 │       │   └── debt.ts               # Debt, DebtPayment, DebtSummary, PayoffPlan, PaycheckAllocation
+│       │   └── simplefin.ts              # SimpleFIN connection, account, transaction types
 │       └── pages/                    # Route-level page components
 │           ├── Dashboard.tsx
 │           ├── Transactions.tsx
@@ -204,6 +213,7 @@ finance-buddy/
 │           ├── SavingsGoals.tsx
 │           ├── Import.tsx
 │           ├── Debts.tsx              # Debt tracker, paycheck planner, payoff strategy
+│           ├── BankSync.tsx              # Bank sync: connect, view accounts, import transactions
 │           └── Settings.tsx
 ├── data/                             # SQLite database file (gitignored)
 │   └── finance-buddy.db
@@ -235,6 +245,9 @@ SQLite database with 12 tables:
 | `ocr_uploads` | Tracks uploaded images for OCR processing. Stores raw extracted text, parsed transaction data, and processing status (pending/processed/confirmed/failed). |
 | `debts` | Tracks all debts: advance, personal, credit card, loan, bill arrears, medical. Priority 1-10 (1=housing critical). Includes creditor, balance, minimum payment, interest rate, auto-deduct flag, status (active/paid_off/paused). |
 | `debt_payments` | Payment log for debts. Each payment reduces the debt balance. CASCADE on delete. Links optionally to a transaction. |
+| `simplefin_connections` | SimpleFIN Bridge connection credentials and status. One active connection per instance. |
+| `linked_accounts` | Bank accounts discovered via SimpleFIN sync. Stores balances and account metadata. CASCADE on connection delete. |
+| `synced_transactions` | Transactions fetched from SimpleFIN. Staged for review before import into main transactions table. UNIQUE on simplefin_transaction_id for dedup. |
 | `_migrations` | Tracks applied SQL migration files. |
 
 ### Conventions
@@ -379,6 +392,18 @@ The backend exposes a REST API at `http://127.0.0.1:3001/api`. FastAPI auto-gene
 - Dark mode screenshots — auto-inverts for OCR readability
 - Rotated phone photos — auto-corrects via EXIF data
 
+#### SimpleFIN Bank Sync
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/simplefin/status` | Connection status and account count |
+| POST | `/api/simplefin/setup` | Connect with setup token from SimpleFIN Bridge. Body: `{ "setup_token": "..." }` |
+| POST | `/api/simplefin/sync` | Trigger manual sync of accounts and transactions from SimpleFIN |
+| GET | `/api/simplefin/accounts` | List linked bank accounts with balances |
+| GET | `/api/simplefin/transactions` | List synced transactions. Query params: `account_id`, `imported` (bool), `start_date`, `end_date`, `page`, `per_page` |
+| POST | `/api/simplefin/import` | Import a single synced transaction. Body: `{ "transaction_id": 1, "category_id": null }` |
+| POST | `/api/simplefin/import-all` | Bulk import all unimported transactions. Body: `{ "account_id": null, "default_category_id": null }` |
+| DELETE | `/api/simplefin/connections/{id}` | Disconnect a SimpleFIN connection |
+
 #### Data Export
 | Method | Path | Description |
 |--------|------|-------------|
@@ -412,6 +437,7 @@ All errors return a consistent envelope:
 | `/investments/{id}` | Investment Detail | Value history line chart, update value form |
 | `/savings-goals` | Savings Goals | Goal cards with progress bars, add contributions, contribution history |
 | `/debts` | Debts | Progress banner with payoff %, celebrations, debt-free countdown, balance over time chart, summary cards, paycheck planner waterfall, debt cards with payments, payoff strategy (avalanche/snowball), "What if" simulator, export/print report, download JSON |
+| `/bank-sync` | Bank Sync | Connect to SimpleFIN Bridge, view linked accounts and balances, browse synced transactions, selectively import or bulk-import into main transactions with auto-categorization |
 | `/import` | Import | Tabbed: CSV import (4-step wizard for bank statement CSVs) and Screenshot/OCR import (3-step wizard for photos of receipts, bank screenshots, credit card statements) |
 | `/settings` | Settings | Tabbed: Categories, Recurring Templates (with Quick Setup Wizard), Tags, Data Export |
 
@@ -575,6 +601,36 @@ The OCR import processes uploaded images through a multi-stage pipeline:
    - Each extracted transaction is matched against past transaction descriptions
    - Falls back to merchant name matching
    - Suggested categories shown in the review UI (user can accept or change)
+
+## Bank Sync (SimpleFIN)
+
+Connect your bank accounts to automatically sync transactions using [SimpleFIN Bridge](https://beta-bridge.simplefin.org/).
+
+### How It Works
+
+1. **Sign up** at [SimpleFIN Bridge](https://beta-bridge.simplefin.org/) ($1.50/month, paid directly to SimpleFIN)
+2. **Add your bank** through SimpleFIN's secure connection flow
+3. **Copy the setup token** from SimpleFIN
+4. **Paste the token** into Finance Buddy's Bank Sync page and click Connect
+5. **Sync** to pull your latest account balances and transactions
+6. **Review** synced transactions in the staging area
+7. **Import** individual transactions or bulk-import all into your main transaction list
+
+### Key Features
+
+- **Account balances**: View current and available balances for all linked accounts
+- **Transaction staging**: Synced transactions land in a staging area — nothing is imported until you review and approve
+- **Auto-categorization**: Imported transactions are automatically categorized based on your past transaction descriptions
+- **Selective import**: Import individual transactions with category overrides, or bulk-import everything
+- **Deduplication**: Transactions are identified by SimpleFIN's unique ID — syncing multiple times never creates duplicates
+- **Disconnect anytime**: Remove your SimpleFIN connection with one click
+
+### Privacy
+
+- SimpleFIN Bridge handles all bank authentication — Finance Buddy never sees your bank credentials
+- Your SimpleFIN access URL is stored locally in the SQLite database (same privacy model as all other data)
+- No data is sent to any external service except SimpleFIN during sync
+- SimpleFIN provides read-only access — no payments or transfers are possible
 
 ## UX Polish
 
