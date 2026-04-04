@@ -60,7 +60,7 @@ A personal finance management web application that helps you track income, expen
   - macOS: `brew install tesseract`
   - Windows: [Download installer](https://github.com/UB-Mannheim/tesseract/wiki)
   - The app works without Tesseract — the screenshot import tab will show install instructions if it's missing
-- **SimpleFIN Bridge** (optional, for bank sync) - [$1.50/month](https://beta-bridge.simplefin.org/) paid directly to SimpleFIN. Sign up, add your bank, and copy the setup token to connect.
+- **SimpleFIN Bridge** (optional, for bank sync) - [$1.50/month](https://beta-bridge.simplefin.org/) paid directly to SimpleFIN. Sign up, add your bank under **Financial Institutions**, then go to **Apps** > **New Connection** to get a setup token.
 
 ## Quick Start
 
@@ -609,12 +609,14 @@ Connect your bank accounts to automatically sync transactions using [SimpleFIN B
 ### How It Works
 
 1. **Sign up** at [SimpleFIN Bridge](https://beta-bridge.simplefin.org/) ($1.50/month, paid directly to SimpleFIN)
-2. **Add your bank** through SimpleFIN's secure connection flow
-3. **Copy the setup token** from SimpleFIN
+2. **Add your bank** — go to **Financial Institutions** and connect your bank. Wait for the status to show as active (this can take a few minutes while SimpleFIN establishes the connection).
+3. **Get a setup token** — go to **Apps** > **New Connection** and copy the setup token
 4. **Paste the token** into Finance Buddy's Bank Sync page and click Connect
 5. **Sync** to pull your latest account balances and transactions
 6. **Review** synced transactions in the staging area
 7. **Import** individual transactions or bulk-import all into your main transaction list
+
+> **Note:** The setup token is one-time use. Once connected, your access persists across app restarts — you never need to enter the token again. If you disconnect and want to reconnect, generate a new token from **Apps** > **New Connection** in SimpleFIN.
 
 ### Key Features
 

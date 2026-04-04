@@ -184,10 +184,14 @@ function SetupView() {
           </li>
           <li className="flex items-start gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#C9A84C]/10 text-[#C9A84C] text-xs font-bold flex items-center justify-center mt-0.5">2</span>
-            <span className="text-sm text-[#a1a1b5]">Add your bank and copy the setup token</span>
+            <span className="text-sm text-[#a1a1b5]">Add your bank under <strong className="text-[#FAF8F5]">Financial Institutions</strong> and wait for it to connect</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#C9A84C]/10 text-[#C9A84C] text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+            <span className="text-sm text-[#a1a1b5]">Go to <strong className="text-[#FAF8F5]">Apps</strong> → <strong className="text-[#FAF8F5]">New Connection</strong> and copy the setup token</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#C9A84C]/10 text-[#C9A84C] text-xs font-bold flex items-center justify-center mt-0.5">4</span>
             <span className="text-sm text-[#a1a1b5]">Paste the token below</span>
           </li>
         </ol>
