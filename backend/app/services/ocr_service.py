@@ -264,10 +264,106 @@ def _detect_document_type(lines: List[str]) -> str:
     return "receipt"
 
 
-def _suggest_category_for_description(description: str) -> Optional[dict]:
-    """Try to match description to a category using past transactions."""
+# Keyword-based category mapping for auto-categorization when no history exists.
+# Maps regex patterns to (category_name, category_type) tuples.
+# Checked in order — first match wins.
+KEYWORD_CATEGORY_MAP = [
+    # Income
+    (re.compile(r'payroll|direct\s*dep|salary|wages', re.I), 'Salary', 'income'),
+    (re.compile(r'freelance|contractor|1099', re.I), 'Freelance', 'income'),
+    (re.compile(r'interest\s*(paid|earned)|dividend|APY', re.I), 'Interest/Dividends', 'income'),
+    (re.compile(r'refund|return|credit.*adjustment|chargeback', re.I), 'Refunds', 'income'),
+
+    # Expense — Transportation
+    (re.compile(r'MTA|NYCT|PAYGO|metro|subway|bus\s*pass|transit', re.I), 'Transportation', 'expense'),
+    (re.compile(r'uber|lyft|taxi|cab\b|curb.*taxi|via\s+ride', re.I), 'Transportation', 'expense'),
+    (re.compile(r'gas\s*station|shell|exxon|mobil|chevron|BP\b|fuel|citgo', re.I), 'Transportation', 'expense'),
+
+    # Expense — Groceries
+    (re.compile(r'grocery|grocer|supermark|whole\s*foods|trader\s*joe|aldi|costco|walmart|target|99\s*cent|deli\b|bodega|food\s*mart|key\s*food|associated|stop\s*.?\s*shop|shoprite|gristedes|fairway|food\s*bazaar|compare|bravo|CTown|met\s*food|pioneer', re.I), 'Groceries', 'expense'),
+
+    # Expense — Dining Out
+    (re.compile(r'restaurant|cafe|coffee|starbucks|dunkin|mcdonald|burger|pizza|chipotle|popeyes|wendy|taco\s*bell|chick.fil|subway\s*sandwich|bakery|bar\s*grill|cachapas|disfruta|pate?\s*palo|wuarache|habib', re.I), 'Dining Out', 'expense'),
+
+    # Expense — Subscriptions
+    (re.compile(r'netflix|spotify|hulu|disney|youtube.*premium|apple\s*com\s*bill|apple\.com|amazon\s*prime|hbo|paramount|peacock|audible|chatgpt|openai|grok|xai|onlyfans|chaturbill|tradingview|tradingvps', re.I), 'Subscriptions', 'expense'),
+
+    # Expense — Utilities
+    (re.compile(r'electric|con\s*ed|coned|power|gas\s*bill|water\s*bill|internet|comcast|spectrum|verizon|t.?mobile|at.?t\b|sprint|cricket|phone\s*bill|utility|utilities|echst\s*net', re.I), 'Utilities', 'expense'),
+
+    # Expense — Healthcare
+    (re.compile(r'pharmacy|cvs|walgreens|duane|rite\s*aid|doctor|hospital|medical|dental|vision|health|clinic|urgent\s*care|quest\s*diag|labcorp|jorge\s*pharmacy', re.I), 'Healthcare', 'expense'),
+
+    # Expense — Insurance
+    (re.compile(r'insurance|geico|state\s*farm|allstate|progressive|liberty\s*mutual|premium', re.I), 'Insurance', 'expense'),
+
+    # Expense — Entertainment
+    (re.compile(r'movie|cinema|theater|theatre|concert|ticket|event|amc|regal|scc\s*event|gaming|playstation|xbox|steam|nintendo', re.I), 'Entertainment', 'expense'),
+
+    # Expense — Fitness / Personal Care
+    (re.compile(r'gym|fitness|puregym|planet\s*fitness|equinox|yoga|salon|barber|spa|nail', re.I), 'Personal Care', 'expense'),
+
+    # Expense — Clothing
+    (re.compile(r'clothing|apparel|zara|h&m|uniqlo|gap\b|old\s*navy|nike|adidas|foot\s*locker|frames\b', re.I), 'Clothing', 'expense'),
+
+    # Expense — Education
+    (re.compile(r'tuition|school|university|college|course|udemy|coursera|textbook', re.I), 'Education', 'expense'),
+
+    # Expense — Rent
+    (re.compile(r'rent\b|mortgage|landlord|property\s*mgmt|apartment', re.I), 'Rent/Mortgage', 'expense'),
+
+    # Expense — Amazon (general shopping)
+    (re.compile(r'amazon|amzn\s*mktp|amzn\.com', re.I), 'Other Expense', 'expense'),
+
+    # Income — Transfers received (BEFORE expense patterns to avoid false matches)
+    (re.compile(r'ATM\s*cash\s*deposit', re.I), 'Other Income', 'income'),
+    (re.compile(r'zelle.*received|venmo.*received', re.I), 'Other Income', 'income'),
+    (re.compile(r'deposit\s*from\s*cash\s*app', re.I), 'Other Income', 'income'),
+    (re.compile(r'deposit\s*from\b', re.I), 'Salary', 'income'),
+
+    # Expense — ATM / Cash
+    (re.compile(r'ATM\s*withdrawal', re.I), 'Other Expense', 'expense'),
+
+    # Expense — Transfers (Zelle, Venmo, Cash App sends)
+    (re.compile(r'zelle.*sent|venmo.*sent', re.I), 'Other Expense', 'expense'),
+    (re.compile(r'cash\s*app\b(?!.*deposit)', re.I), 'Other Expense', 'expense'),
+
+    # Expense — Credit card / loan payments
+    (re.compile(r'payment\s*to\s*chase|electronic\s*payment|loan\s*payment|credit\s*card\s*payment', re.I), 'Other Expense', 'expense'),
+]
+
+
+def _keyword_categorize(description: str, tx_type: str) -> Optional[dict]:
+    """Categorize a transaction by matching description against keyword patterns."""
+    conn = get_connection()
+    try:
+        for pattern, cat_name, cat_type in KEYWORD_CATEGORY_MAP:
+            if pattern.search(description):
+                row = conn.execute(
+                    "SELECT id, name, icon, color FROM categories WHERE name = ? AND type = ?",
+                    (cat_name, cat_type),
+                ).fetchone()
+                if row:
+                    return {
+                        "category_id": row["id"],
+                        "category_name": row["name"],
+                        "category_icon": row["icon"],
+                        "category_color": row["color"],
+                        "confidence": "keyword",
+                    }
+        return None
+    finally:
+        conn.close()
+
+
+def _suggest_category_for_description(description: str, tx_type: str = "expense") -> Optional[dict]:
+    """Try to match description to a category using past transactions, then keyword fallback."""
     from app.services.transaction_service import suggest_category
-    return suggest_category(description)
+    result = suggest_category(description)
+    if result:
+        return result
+    # Fallback to keyword-based matching
+    return _keyword_categorize(description, tx_type)
 
 
 def _check_duplicate_in_db(amount: int, description: str, date: str) -> List[dict]:
@@ -460,7 +556,7 @@ def parse_amounts(text: str) -> List[dict]:
 
     # Auto-categorize each result
     for item in results:
-        suggestion = _suggest_category_for_description(item["description"])
+        suggestion = _suggest_category_for_description(item["description"], item.get("type", "expense"))
         if suggestion:
             item["suggested_category_id"] = suggestion["category_id"]
             item["suggested_category_name"] = suggestion["category_name"]
@@ -468,7 +564,7 @@ def parse_amounts(text: str) -> List[dict]:
 
         # Also try merchant name for category suggestion
         if not suggestion and merchant_name:
-            merchant_suggestion = _suggest_category_for_description(merchant_name)
+            merchant_suggestion = _suggest_category_for_description(merchant_name, item.get("type", "expense"))
             if merchant_suggestion:
                 item["suggested_category_id"] = merchant_suggestion["category_id"]
                 item["suggested_category_name"] = merchant_suggestion["category_name"]
@@ -716,7 +812,7 @@ def process_pdf(filename: str, file_bytes: bytes) -> dict:
         if extracted:
             # Auto-categorize and check duplicates
             for item in extracted:
-                suggestion = _suggest_category_for_description(item["description"])
+                suggestion = _suggest_category_for_description(item["description"], item.get("type", "expense"))
                 if suggestion:
                     item["suggested_category_id"] = suggestion["category_id"]
                     item["suggested_category_name"] = suggestion["category_name"]
