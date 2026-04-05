@@ -266,69 +266,90 @@ def _detect_document_type(lines: List[str]) -> str:
 
 # Keyword-based category mapping for auto-categorization when no history exists.
 # Maps regex patterns to (category_name, category_type) tuples.
-# Checked in order — first match wins.
+# Checked in order — first match wins. More specific patterns go first.
 KEYWORD_CATEGORY_MAP = [
-    # Income
+    # ---- INCOME (check first to avoid false expense matches) ----
     (re.compile(r'payroll|direct\s*dep|salary|wages', re.I), 'Salary', 'income'),
     (re.compile(r'freelance|contractor|1099', re.I), 'Freelance', 'income'),
-    (re.compile(r'interest\s*(paid|earned)|dividend|APY', re.I), 'Interest/Dividends', 'income'),
-    (re.compile(r'refund|return|credit.*adjustment|chargeback', re.I), 'Refunds', 'income'),
-
-    # Expense — Transportation
-    (re.compile(r'MTA|NYCT|PAYGO|metro|subway|bus\s*pass|transit', re.I), 'Transportation', 'expense'),
-    (re.compile(r'uber|lyft|taxi|cab\b|curb.*taxi|via\s+ride', re.I), 'Transportation', 'expense'),
-    (re.compile(r'gas\s*station|shell|exxon|mobil|chevron|BP\b|fuel|citgo', re.I), 'Transportation', 'expense'),
-
-    # Expense — Groceries
-    (re.compile(r'grocery|grocer|supermark|whole\s*foods|trader\s*joe|aldi|costco|walmart|target|99\s*cent|deli\b|bodega|food\s*mart|key\s*food|associated|stop\s*.?\s*shop|shoprite|gristedes|fairway|food\s*bazaar|compare|bravo|CTown|met\s*food|pioneer', re.I), 'Groceries', 'expense'),
-
-    # Expense — Dining Out
-    (re.compile(r'restaurant|cafe|coffee|starbucks|dunkin|mcdonald|burger|pizza|chipotle|popeyes|wendy|taco\s*bell|chick.fil|subway\s*sandwich|bakery|bar\s*grill|cachapas|disfruta|pate?\s*palo|wuarache|habib', re.I), 'Dining Out', 'expense'),
-
-    # Expense — Subscriptions
-    (re.compile(r'netflix|spotify|hulu|disney|youtube.*premium|apple\s*com\s*bill|apple\.com|amazon\s*prime|hbo|paramount|peacock|audible|chatgpt|openai|grok|xai|onlyfans|chaturbill|tradingview|tradingvps', re.I), 'Subscriptions', 'expense'),
-
-    # Expense — Utilities
-    (re.compile(r'electric|con\s*ed|coned|power|gas\s*bill|water\s*bill|internet|comcast|spectrum|verizon|t.?mobile|at.?t\b|sprint|cricket|phone\s*bill|utility|utilities|echst\s*net', re.I), 'Utilities', 'expense'),
-
-    # Expense — Healthcare
-    (re.compile(r'pharmacy|cvs|walgreens|duane|rite\s*aid|doctor|hospital|medical|dental|vision|health|clinic|urgent\s*care|quest\s*diag|labcorp|jorge\s*pharmacy', re.I), 'Healthcare', 'expense'),
-
-    # Expense — Insurance
-    (re.compile(r'insurance|geico|state\s*farm|allstate|progressive|liberty\s*mutual|premium', re.I), 'Insurance', 'expense'),
-
-    # Expense — Entertainment
-    (re.compile(r'movie|cinema|theater|theatre|concert|ticket|event|amc|regal|scc\s*event|gaming|playstation|xbox|steam|nintendo', re.I), 'Entertainment', 'expense'),
-
-    # Expense — Fitness / Personal Care
-    (re.compile(r'gym|fitness|puregym|planet\s*fitness|equinox|yoga|salon|barber|spa|nail', re.I), 'Personal Care', 'expense'),
-
-    # Expense — Clothing
-    (re.compile(r'clothing|apparel|zara|h&m|uniqlo|gap\b|old\s*navy|nike|adidas|foot\s*locker|frames\b', re.I), 'Clothing', 'expense'),
-
-    # Expense — Education
-    (re.compile(r'tuition|school|university|college|course|udemy|coursera|textbook', re.I), 'Education', 'expense'),
-
-    # Expense — Rent
-    (re.compile(r'rent\b|mortgage|landlord|property\s*mgmt|apartment', re.I), 'Rent/Mortgage', 'expense'),
-
-    # Expense — Amazon (general shopping)
-    (re.compile(r'amazon|amzn\s*mktp|amzn\.com', re.I), 'Other Expense', 'expense'),
-
-    # Income — Transfers received (BEFORE expense patterns to avoid false matches)
+    (re.compile(r'interest\s*(paid|earned)|dividend|APY|monthly\s*interest', re.I), 'Interest/Dividends', 'income'),
+    (re.compile(r'refund|return|credit.*adjustment|chargeback|card\s*adjustment.*credit', re.I), 'Refunds', 'income'),
     (re.compile(r'ATM\s*cash\s*deposit', re.I), 'Other Income', 'income'),
     (re.compile(r'zelle.*received|venmo.*received', re.I), 'Other Income', 'income'),
     (re.compile(r'deposit\s*from\s*cash\s*app', re.I), 'Other Income', 'income'),
     (re.compile(r'deposit\s*from\b', re.I), 'Salary', 'income'),
 
-    # Expense — ATM / Cash
-    (re.compile(r'ATM\s*withdrawal', re.I), 'Other Expense', 'expense'),
+    # ---- EXPENSE — Entertainment (adult/digital — BEFORE subscriptions) ----
+    (re.compile(r'chaturbill|chaturbate', re.I), 'Entertainment', 'expense'),
+    (re.compile(r'onlyfans', re.I), 'Entertainment', 'expense'),
+    (re.compile(r'echst\s*net|echst\.net', re.I), 'Entertainment', 'expense'),
+    (re.compile(r'paymentico|UPG\s*PAYMENT', re.I), 'Entertainment', 'expense'),
+    (re.compile(r'movie|cinema|theater|theatre|concert|ticket|event\b|amc\b|regal|scc\s*event|gaming|playstation|xbox|steam\b|nintendo|bowling|arcade|frames\s+(nyc|new\s*york|bowling)', re.I), 'Entertainment', 'expense'),
 
-    # Expense — Transfers (Zelle, Venmo, Cash App sends)
-    (re.compile(r'zelle.*sent|venmo.*sent', re.I), 'Other Expense', 'expense'),
+    # ---- EXPENSE — Healthcare (BEFORE general patterns) ----
+    (re.compile(r'pharmacy|cvs\b|walgreens|duane\s*rea|rite\s*aid|jorge\s*pharmacy', re.I), 'Healthcare', 'expense'),
+    (re.compile(r'\bMD\s*PC\b|\bMD\b.*\bPC\b|doctor|hospital|medical|dental|dentist|vision|optom|dermatol|clinic|urgent\s*care|quest\s*diag|labcorp|health\s*center|physician', re.I), 'Healthcare', 'expense'),
+
+    # ---- EXPENSE — Transportation ----
+    (re.compile(r'MTA\b|NYCT|PAYGO|metro\s*card|subway|bus\s*pass|transit', re.I), 'Transportation', 'expense'),
+    (re.compile(r'uber|lyft|taxi|cab\b|curb.*taxi|via\s+ride', re.I), 'Transportation', 'expense'),
+    (re.compile(r'gas\s*station|shell\b|exxon|mobil\b|chevron|BP\b|fuel|citgo|wawa', re.I), 'Transportation', 'expense'),
+    (re.compile(r'delta\s*air|united\s*air|american\s*air|jetblue|southwest|spirit\s*air|airline|airways', re.I), 'Transportation', 'expense'),
+
+    # ---- EXPENSE — Dining Out (restaurants, cafes, fast food, bakeries) ----
+    (re.compile(r'restaurant|cafe\b|coffee|starbucks|dunkin|mcdonald|burger\s*king|pizza|chipotle|popeyes|wendy|taco\s*bell|chick.fil|five\s*guys|shake\s*shack', re.I), 'Dining Out', 'expense'),
+    (re.compile(r'bakery|panaderia|bar\s*(&|and)?\s*grill', re.I), 'Dining Out', 'expense'),
+    # Latin / NYC specific restaurants
+    (re.compile(r'cachapas|empanada|lechonera|sabroso|sabrosita|arepa|taqueria|wuarache|huarache|disfruta|pate.?palo', re.I), 'Dining Out', 'expense'),
+    # Common NYC restaurant patterns (TST = Toast POS system)
+    (re.compile(r'\bTST\b|SQ\b.*\b(bakery|cafe|restaurant|grill|kitchen|pizza|taco|deli\s+&)', re.I), 'Dining Out', 'expense'),
+
+    # ---- EXPENSE — Groceries (stores, delis, supermarkets, bodegas) ----
+    (re.compile(r'grocery|grocer|supermark|whole\s*foods|trader\s*joe|aldi\b|costco|walmart|target|99\s*cent', re.I), 'Groceries', 'expense'),
+    (re.compile(r'\bdeli\b|bodega|food\s*mart|key\s*food|associated|stop\s*.?\s*shop|shoprite|gristedes|fairway|food\s*bazaar|compare|bravo|CTown|met\s*food|pioneer', re.I), 'Groceries', 'expense'),
+    (re.compile(r'convenience|conveniencia|esfuer[sz]o|dollar\s*(tree|general)|family\s*dollar', re.I), 'Groceries', 'expense'),
+
+    # ---- EXPENSE — Subscriptions (digital, streaming, software) ----
+    (re.compile(r'netflix|spotify|hulu|disney\s*\+|youtube.*premium|hbo|paramount|peacock|audible|kindle', re.I), 'Subscriptions', 'expense'),
+    (re.compile(r'apple\s*com\s*bill|apple\.com|itunes', re.I), 'Subscriptions', 'expense'),
+    (re.compile(r'amazon\s*prime', re.I), 'Subscriptions', 'expense'),
+    (re.compile(r'chatgpt|openai|grok\b|xai\b|anthropic|claude', re.I), 'Subscriptions', 'expense'),
+    (re.compile(r'tradingview|tradingvps', re.I), 'Subscriptions', 'expense'),
+
+    # ---- EXPENSE — Utilities (phone, internet, electric, water, gas) ----
+    (re.compile(r'electric|con\s*ed|coned|power\s*bill|national\s*grid', re.I), 'Utilities', 'expense'),
+    (re.compile(r'gas\s*bill|water\s*bill|sewage|utility|utilities', re.I), 'Utilities', 'expense'),
+    (re.compile(r'internet|comcast|spectrum|optimum|fios|xfinity', re.I), 'Utilities', 'expense'),
+    (re.compile(r't.?mobile|at.?t\b|sprint|cricket|verizon|phone\s*bill|boost\s*mobile|metro\s*pcs|mint\s*mobile', re.I), 'Utilities', 'expense'),
+
+    # ---- EXPENSE — Insurance ----
+    (re.compile(r'insurance|geico|state\s*farm|allstate|progressive|liberty\s*mutual|premium|aetna|cigna|united\s*health|oscar\s*health', re.I), 'Insurance', 'expense'),
+
+    # ---- EXPENSE — Personal Care / Fitness ----
+    (re.compile(r'gym\b|fitness|puregym|planet\s*fitness|equinox|yoga|crossfit|blink\s*fitness|crunch', re.I), 'Personal Care', 'expense'),
+    (re.compile(r'salon|barber|spa\b|nail|waxing|beauty|haircut|massage', re.I), 'Personal Care', 'expense'),
+
+    # ---- EXPENSE — Clothing ----
+    (re.compile(r'clothing|apparel|zara\b|h&m\b|uniqlo|gap\b|old\s*navy|nike\b|adidas|foot\s*locker|marshalls|tj\s*maxx|ross\b|nordstrom|macys', re.I), 'Clothing', 'expense'),
+
+    # ---- EXPENSE — Education ----
+    (re.compile(r'tuition|school|university|college|course|udemy|coursera|textbook|student|academic', re.I), 'Education', 'expense'),
+
+    # ---- EXPENSE — Rent ----
+    (re.compile(r'rent\b|mortgage|landlord|property\s*mgmt|property\s*manage|apartment', re.I), 'Rent/Mortgage', 'expense'),
+
+    # ---- EXPENSE — Shopping (Amazon, general online) ----
+    (re.compile(r'amazon|amzn\s*mktp|amzn\.com', re.I), 'Other Expense', 'expense'),
+
+    # ---- EXPENSE — Peer transfers and payments ----
+    (re.compile(r'zelle.*sent|venmo.*sent|venmo.*payment', re.I), 'Other Expense', 'expense'),
+    (re.compile(r'paypal\b', re.I), 'Other Expense', 'expense'),
+    (re.compile(r'gumroad', re.I), 'Other Expense', 'expense'),
     (re.compile(r'cash\s*app\b(?!.*deposit)', re.I), 'Other Expense', 'expense'),
 
-    # Expense — Credit card / loan payments
+    # ---- EXPENSE — ATM / Cash ----
+    (re.compile(r'ATM\s*withdrawal', re.I), 'Other Expense', 'expense'),
+
+    # ---- EXPENSE — Credit card / loan payments ----
     (re.compile(r'payment\s*to\s*chase|electronic\s*payment|loan\s*payment|credit\s*card\s*payment', re.I), 'Other Expense', 'expense'),
 ]
 
