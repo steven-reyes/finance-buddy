@@ -660,11 +660,12 @@ def process_image(filename: str, file_bytes: bytes) -> dict:
         os.unlink(tmp_path)
 
 
-def _parse_statement_line(line: str, year: int) -> Optional[dict]:
+def _parse_statement_line(line: str, year: int, prepend_desc: str = "") -> Optional[dict]:
     """Parse a single bank statement line into a transaction dict.
 
     Expected format: 'Dec 1 Digital Card Purchase - ROYAL DELI BRONX NY Debit - $6.24 $4,569.99'
     or multi-line wrapped descriptions that were joined.
+    prepend_desc: description fragment from lines BEFORE the date line (multi-line wrap).
     """
     # Match lines starting with a date like "Dec 1" or "Dec 31"
     date_match = re.match(
@@ -723,6 +724,13 @@ def _parse_statement_line(line: str, year: int) -> Optional[dict]:
 
     # Determine type from sign
     tx_type = "income" if sign == '+' else "expense"
+
+    # Combine prepended description (from lines before) with inline description
+    if prepend_desc:
+        if description and len(description) > 2:
+            description = prepend_desc + ' ' + description
+        else:
+            description = prepend_desc
 
     # Clean description
     description = description.strip(' -:.')
@@ -785,34 +793,63 @@ def _parse_statement_text(text: str) -> List[dict]:
             year = int(year_match.group(1))
             break
 
-    # Join continuation lines (lines that don't start with a date or separator)
-    # Only join if the previous line does NOT end with a balance ($ amount at end),
-    # which means the description wrapped to the next line.
-    joined_lines = []
+    # Accumulate-then-flush pattern for multi-line descriptions.
+    #
+    # Capital One wraps long descriptions across multiple lines:
+    #   "Digital Card Purchase - TST CACHAPAS Y MAS 1 NEW YORK"  ← desc fragment (no date)
+    #   "Mar 1 Debit - $18.88 $23,547.94"                        ← date+amount line
+    #   "NY"                                                       ← desc tail fragment
+    #
+    # Strategy:
+    # 1. Buffer non-date lines as pending description fragments
+    # 2. When a date+amount line appears, pass the buffer as prepend_desc
+    # 3. After a complete transaction line, append any following fragments
     month_pattern = re.compile(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d', re.IGNORECASE)
-    skip_pattern = re.compile(r'^(---|Page\s+\d|Steven|DATE|DESCRIPTION|CATEGORY|AMOUNT|BALANCE|STATEMENT|capitalone|ACCOUNT|MEMBER|FDIC|Thanks|Here\'s|TOTAL|IN ALL|Account Summary|Cashflow|ANNUAL|APY|\d+\.\d+%|\$\d)', re.IGNORECASE)
+    skip_pattern = re.compile(r'^(---|Page\s+\d|Steven|DATE|DESCRIPTION|CATEGORY|AMOUNT|BALANCE|STATEMENT|capitalone|ACCOUNT|MEMBER|FDIC|Thanks|Here\'s|TOTAL|IN ALL|Account Summary|Cashflow|ANNUAL|APY|\d+\.\d+%|\$\d|0\.\d+%)', re.IGNORECASE)
     has_balance = re.compile(r'\$[\d,]+\.\d{2}\s*$')
 
+    # First pass: build a list of (line, is_date_line, has_balance) tuples
+    classified = []
     for line in lines:
         line = line.strip()
         if not line or skip_pattern.match(line):
             continue
-        if month_pattern.match(line):
-            joined_lines.append(line)
-        elif joined_lines and not has_balance.search(joined_lines[-1]):
-            # Previous line has no trailing balance — this is a wrapped description
-            joined_lines[-1] = joined_lines[-1] + ' ' + line
-        # If previous line HAS a balance but this line doesn't start with a date,
-        # it's a continuation of a description for the NEXT date line — skip it
-        # (it will be part of noise like addresses, account numbers, etc.)
+        is_date = bool(month_pattern.match(line))
+        has_bal = bool(has_balance.search(line))
+        classified.append((line, is_date, has_bal))
 
-    # Parse each joined line — no dedup here since bank statements
-    # legitimately have duplicate entries (e.g., multiple MTA rides per day)
+    # Second pass: group into transactions using accumulate-then-flush
     results = []
-    for line in joined_lines:
-        tx = _parse_statement_line(line, year)
-        if tx:
-            results.append(tx)
+    desc_buffer = []
+
+    for i, (line, is_date, has_bal) in enumerate(classified):
+        if is_date and has_bal:
+            # This is a complete date+amount line — parse it with any buffered description
+            prepend = ' '.join(desc_buffer).strip()
+            desc_buffer = []
+            tx = _parse_statement_line(line, year, prepend_desc=prepend)
+            if tx:
+                results.append(tx)
+        elif is_date and not has_bal:
+            # Date line without balance — likely a date-prefixed description fragment
+            # e.g., "Mar 3 360 Checking Card Adjustment Signature (Credit) NEW"
+            # Buffer it (strip the date prefix, keep the description part)
+            date_strip = re.sub(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s*', '', line, flags=re.IGNORECASE)
+            if date_strip.strip():
+                desc_buffer.append(date_strip.strip())
+        else:
+            # Non-date line — could be:
+            # a) Continuation AFTER a complete transaction (e.g., "NY" tail)
+            # b) Description fragment BEFORE the next transaction
+            if results and not desc_buffer:
+                # Check if this looks like a location tail (short, no amounts)
+                # Append to previous transaction's description
+                prev = results[-1]
+                if prev["description"] != "Bank transaction" and len(line) < 40 and not re.search(r'\$\d', line):
+                    prev["description"] = prev["description"] + ' ' + line.strip()
+                    continue
+            # Otherwise, buffer as description for the next transaction
+            desc_buffer.append(line)
 
     return results
 
