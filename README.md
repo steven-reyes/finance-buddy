@@ -54,6 +54,7 @@ A personal finance management web application that helps you track income, expen
 | pytesseract 0.3.13 | Python wrapper for Tesseract OCR engine |
 | Pillow 11.0 | Image processing (grayscale, contrast, rotation, dark mode inversion) |
 | numpy | Pixel brightness analysis for dark mode detection |
+| pdf2image | PDF to image conversion for OCR processing |
 | requests | HTTP client for SimpleFIN API integration |
 
 ### Frontend
@@ -82,6 +83,10 @@ A personal finance management web application that helps you track income, expen
   - macOS: `brew install tesseract`
   - Windows: [Download installer](https://github.com/UB-Mannheim/tesseract/wiki)
   - The app works without Tesseract — the screenshot import tab will show install instructions if it's missing
+- **Poppler** (optional, for PDF import):
+  - Ubuntu/Debian: `sudo apt install poppler-utils`
+  - macOS: `brew install poppler`
+  - Windows: [Download from GitHub](https://github.com/oschwartz10612/poppler-windows/releases)
 - **SimpleFIN Bridge** (optional, for bank sync) - [$1.50/month](https://beta-bridge.simplefin.org/) paid directly to SimpleFIN. Sign up, add your bank under **Financial Institutions**, then go to **Apps** > **New Connection** to get a setup token.
 
 ## Quick Start

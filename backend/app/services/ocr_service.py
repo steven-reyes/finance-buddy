@@ -126,16 +126,33 @@ def extract_text_from_image(image_path: str) -> str:
             "macOS: brew install tesseract | "
             "Windows: download from https://github.com/UB-Mannheim/tesseract/wiki"
         )
-    img = Image.open(image_path)
+    try:
+        img = Image.open(image_path)
+    except Exception as e:
+        raise RuntimeError(f"Could not open image file: {e}")
     img = _preprocess_image(img)
     # Use Tesseract with optimized config for receipts/statements
     custom_config = r'--oem 3 --psm 6'
-    text = pytesseract.image_to_string(img, config=custom_config)
+    try:
+        text = pytesseract.image_to_string(img, config=custom_config)
+    except Exception as e:
+        raise RuntimeError(f"OCR processing failed: {e}")
+    return text
+
+
+def _normalize_ocr_text(text: str) -> str:
+    """Fix common OCR character substitutions in date-like contexts."""
+    # O -> 0 when adjacent to digits (e.g., "O3/05" -> "03/05")
+    text = re.sub(r'\bO(\d)', r'0\1', text)
+    text = re.sub(r'(\d)O\b', r'\g<1>0', text)
+    # l -> 1 when in numeric context
+    text = re.sub(r'\bl(\d)', r'1\1', text)
     return text
 
 
 def _parse_date_from_text(text: str, allow_no_year: bool = False) -> Optional[str]:
     """Try to extract a date from a text string."""
+    text = _normalize_ocr_text(text)
     current_year = datetime.now().year
 
     # Try patterns with year first
@@ -412,7 +429,7 @@ def parse_amounts(text: str) -> List[dict]:
         # Extract line-specific date (for statements, including no-year dates)
         line_date = global_date
         if doc_type == "statement":
-            parsed_date = _parse_date_from_text(line, allow_no_year=True)
+            parsed_date = _parse_date_from_text(_normalize_ocr_text(line), allow_no_year=True)
             if parsed_date:
                 line_date = parsed_date
                 # Remove date from description
@@ -526,10 +543,88 @@ def process_image(filename: str, file_bytes: bytes) -> dict:
         os.unlink(tmp_path)
 
 
+def process_pdf(filename: str, file_bytes: bytes) -> dict:
+    """Convert PDF pages to images and run OCR on each, combining results."""
+    if not TESSERACT_AVAILABLE:
+        raise RuntimeError("Tesseract OCR is not installed")
+
+    try:
+        from pdf2image import convert_from_bytes
+    except ImportError:
+        raise RuntimeError("pdf2image is not installed. Run: pip install pdf2image")
+
+    try:
+        images = convert_from_bytes(file_bytes, dpi=300)
+    except Exception as e:
+        raise RuntimeError(f"Failed to convert PDF: {e}")
+
+    all_raw_text = []
+    all_extracted = []
+    seen_ids = set()
+
+    for i, img in enumerate(images):
+        # Save page as temp image and run through existing pipeline
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            img.save(tmp, format="PNG")
+            tmp_path = tmp.name
+
+        try:
+            raw_text = extract_text_from_image(tmp_path)
+            all_raw_text.append(f"--- Page {i + 1} ---\n{raw_text}")
+            page_extracted = parse_amounts(raw_text)
+            for tx in page_extracted:
+                # Dedup across pages by amount + date + description
+                dedup_key = (tx.get("amount"), tx.get("date"), tx.get("description", "").strip())
+                if dedup_key not in seen_ids:
+                    seen_ids.add(dedup_key)
+                    all_extracted.append(tx)
+        finally:
+            os.unlink(tmp_path)
+
+    combined_text = "\n".join(all_raw_text)
+    lines = combined_text.strip().split('\n')
+    doc_type = _detect_document_type(lines)
+
+    # Store in DB
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO ocr_uploads (filename, raw_text, extracted_data, status) VALUES (?, ?, ?, ?)",
+            (filename, combined_text, json.dumps(all_extracted), 'processed'),
+        )
+        conn.commit()
+        upload_id = cursor.lastrowid
+    finally:
+        conn.close()
+
+    return {
+        "upload_id": upload_id,
+        "filename": filename,
+        "raw_text": combined_text,
+        "doc_type": doc_type,
+        "merchant_name": None,
+        "transactions": all_extracted,
+        "count": len(all_extracted),
+        "page_count": len(images),
+        "duplicate_count": sum(1 for t in all_extracted if t.get("is_duplicate")),
+    }
+
+
 def confirm_ocr_transactions(upload_id: int, transactions: list) -> dict:
     """Confirm and bulk-insert OCR-extracted transactions."""
     from app.services.transaction_service import bulk_create
     from app.models.transaction import TransactionCreate
+
+    # Validate upload_id exists
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT id, status FROM ocr_uploads WHERE id = ?", (upload_id,)).fetchone()
+        if not row:
+            raise ValueError(f"OCR upload {upload_id} not found")
+        if row["status"] == "confirmed":
+            raise ValueError(f"OCR upload {upload_id} has already been confirmed")
+    finally:
+        conn.close()
 
     dtos = []
     for tx in transactions:

@@ -34,24 +34,37 @@ def check_ocr_status():
     }
 
 
+ALLOWED_TYPES = {
+    "image/jpeg", "image/png", "image/jpg",
+    "application/pdf",
+}
+
+
 @router.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
-    """Upload an image for OCR processing."""
-    if not file.content_type or not file.content_type.startswith("image/"):
+    """Upload an image or PDF for OCR processing."""
+    content_type = file.content_type or ""
+    is_pdf = content_type == "application/pdf" or (file.filename or "").lower().endswith(".pdf")
+    is_image = content_type.startswith("image/")
+
+    if not is_pdf and not is_image:
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "INVALID_FILE", "message": "Only image files (JPG, PNG) are accepted"}},
+            detail={"error": {"code": "INVALID_FILE", "message": "Only image files (JPG, PNG) and PDF files are accepted"}},
         )
 
     contents = await file.read()
-    if len(contents) > 10 * 1024 * 1024:  # 10MB limit
+    if len(contents) > 20 * 1024 * 1024:  # 20MB limit for PDFs
         raise HTTPException(
             status_code=400,
-            detail={"error": {"code": "FILE_TOO_LARGE", "message": "Image must be under 10MB"}},
+            detail={"error": {"code": "FILE_TOO_LARGE", "message": "File must be under 20MB"}},
         )
 
     try:
-        result = ocr_service.process_image(file.filename or "upload.png", contents)
+        if is_pdf:
+            result = ocr_service.process_pdf(file.filename or "upload.pdf", contents)
+        else:
+            result = ocr_service.process_image(file.filename or "upload.png", contents)
         return result
     except RuntimeError as e:
         raise HTTPException(

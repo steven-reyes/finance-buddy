@@ -613,12 +613,12 @@ function ScreenshotImport() {
             ) : (
               <>
                 <Camera size={48} className="mx-auto text-gray-500 mb-4" />
-                <p className="text-gray-300 mb-2">Drag and drop a screenshot or receipt image</p>
-                <p className="text-gray-500 text-sm mb-4">Supports JPG and PNG files</p>
+                <p className="text-gray-300 mb-2">Drag and drop a screenshot, receipt image, or PDF</p>
+                <p className="text-gray-500 text-sm mb-4">Supports JPG, PNG, and PDF files</p>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".jpg,.jpeg,.png"
+                  accept=".jpg,.jpeg,.png,.pdf"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];

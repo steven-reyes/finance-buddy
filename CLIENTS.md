@@ -24,6 +24,9 @@ A personal finance app that helps you track income, expenses, investments, and s
   - Mac: `brew install tesseract`
   - Windows: [Download installer](https://github.com/UB-Mannheim/tesseract/wiki)
   - The app works fine without it — the screenshot import tab will show instructions if it's missing
+- **Poppler** *(optional — only needed for PDF import)*:
+  - Mac: `brew install poppler`
+  - Windows: [Download from GitHub](https://github.com/oschwartz10612/poppler-windows/releases)
 
 ## Setup (One-Time)
 
