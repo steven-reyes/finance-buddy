@@ -543,10 +543,224 @@ def process_image(filename: str, file_bytes: bytes) -> dict:
         os.unlink(tmp_path)
 
 
+def _parse_statement_line(line: str, year: int) -> Optional[dict]:
+    """Parse a single bank statement line into a transaction dict.
+
+    Expected format: 'Dec 1 Digital Card Purchase - ROYAL DELI BRONX NY Debit - $6.24 $4,569.99'
+    or multi-line wrapped descriptions that were joined.
+    """
+    # Match lines starting with a date like "Dec 1" or "Dec 31"
+    date_match = re.match(
+        r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)',
+        line, re.IGNORECASE,
+    )
+    if not date_match:
+        return None
+
+    month_str = date_match.group(1)
+    day = int(date_match.group(2))
+    rest = date_match.group(3).strip()
+
+    # Parse date
+    try:
+        date_obj = datetime.strptime(f"{month_str} {day} {year}", "%b %d %Y")
+        date_str = date_obj.strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+    # Skip Opening/Closing Balance lines
+    if re.match(r'^(Opening|Closing)\s+Balance', rest, re.IGNORECASE):
+        return None
+
+    # Extract amount — look for the pattern: (Credit|Debit) (+|-) $amount $balance
+    # or just (+|-) $amount $balance
+    amount_match = re.search(
+        r'(Credit|Debit)\s*([+\-])\s*\$\s*([\d,]+\.?\d*)\s+\$[\d,]+\.?\d*\s*$',
+        rest, re.IGNORECASE,
+    )
+    if not amount_match:
+        # Try without Credit/Debit label
+        amount_match = re.search(
+            r'([+\-])\s*\$\s*([\d,]+\.?\d*)\s+\$[\d,]+\.?\d*\s*$',
+            rest,
+        )
+        if amount_match:
+            sign = amount_match.group(1)
+            amount_str = amount_match.group(2).replace(',', '')
+            description = rest[:amount_match.start()].strip()
+        else:
+            return None
+    else:
+        category_label = amount_match.group(1)
+        sign = amount_match.group(2)
+        amount_str = amount_match.group(3).replace(',', '')
+        description = rest[:amount_match.start()].strip()
+
+    try:
+        amount_cents = round(float(amount_str) * 100)
+    except ValueError:
+        return None
+
+    if amount_cents <= 0:
+        return None
+
+    # Determine type from sign
+    tx_type = "income" if sign == '+' else "expense"
+
+    # Clean description
+    description = description.strip(' -:.')
+    description = re.sub(r'\s+', ' ', description).strip()
+
+    if not description or len(description) < 2:
+        description = "Bank transaction"
+
+    return {
+        "amount": amount_cents,
+        "date": date_str,
+        "description": description,
+        "type": tx_type,
+        "_is_total": False,
+    }
+
+
+def _extract_pdf_text(file_bytes: bytes) -> Optional[str]:
+    """Try to extract embedded text from PDF using pdfplumber."""
+    try:
+        import pdfplumber
+    except ImportError:
+        return None
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
+
+    try:
+        all_text = []
+        with pdfplumber.open(tmp_path) as pdf:
+            for i, page in enumerate(pdf.pages):
+                text = page.extract_text()
+                if text:
+                    all_text.append(f"--- Page {i + 1} ---\n{text}")
+        combined = "\n".join(all_text)
+        # Check if we got meaningful text (not just a scanned image)
+        if len(combined.strip()) < 50:
+            return None
+        return combined
+    except Exception:
+        return None
+    finally:
+        os.unlink(tmp_path)
+
+
+def _parse_statement_text(text: str) -> List[dict]:
+    """Parse structured bank statement text into transactions.
+
+    Handles multi-line descriptions by joining continuation lines
+    (lines that don't start with a month name) with the previous line.
+    """
+    lines = text.strip().split('\n')
+
+    # Detect statement year from header
+    year = datetime.now().year
+    for line in lines[:20]:
+        year_match = re.search(r'(20\d{2})', line)
+        if year_match:
+            year = int(year_match.group(1))
+            break
+
+    # Join continuation lines (lines that don't start with a date or separator)
+    # Only join if the previous line does NOT end with a balance ($ amount at end),
+    # which means the description wrapped to the next line.
+    joined_lines = []
+    month_pattern = re.compile(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d', re.IGNORECASE)
+    skip_pattern = re.compile(r'^(---|Page\s+\d|Steven|DATE|DESCRIPTION|CATEGORY|AMOUNT|BALANCE|STATEMENT|capitalone|ACCOUNT|MEMBER|FDIC|Thanks|Here\'s|TOTAL|IN ALL|Account Summary|Cashflow|ANNUAL|APY|\d+\.\d+%|\$\d)', re.IGNORECASE)
+    has_balance = re.compile(r'\$[\d,]+\.\d{2}\s*$')
+
+    for line in lines:
+        line = line.strip()
+        if not line or skip_pattern.match(line):
+            continue
+        if month_pattern.match(line):
+            joined_lines.append(line)
+        elif joined_lines and not has_balance.search(joined_lines[-1]):
+            # Previous line has no trailing balance — this is a wrapped description
+            joined_lines[-1] = joined_lines[-1] + ' ' + line
+        # If previous line HAS a balance but this line doesn't start with a date,
+        # it's a continuation of a description for the NEXT date line — skip it
+        # (it will be part of noise like addresses, account numbers, etc.)
+
+    # Parse each joined line — no dedup here since bank statements
+    # legitimately have duplicate entries (e.g., multiple MTA rides per day)
+    results = []
+    for line in joined_lines:
+        tx = _parse_statement_line(line, year)
+        if tx:
+            results.append(tx)
+
+    return results
+
+
 def process_pdf(filename: str, file_bytes: bytes) -> dict:
-    """Convert PDF pages to images and run OCR on each, combining results."""
+    """Process a PDF file: try direct text extraction first, fall back to OCR.
+
+    Digital PDFs (like bank statements from Capital One, Chase, etc.) have
+    embedded text that can be extracted perfectly. Scanned PDFs need OCR.
+    """
+    # Step 1: Try direct text extraction with pdfplumber
+    direct_text = _extract_pdf_text(file_bytes)
+
+    if direct_text:
+        # Parse the structured text
+        extracted = _parse_statement_text(direct_text)
+
+        if extracted:
+            # Auto-categorize and check duplicates
+            for item in extracted:
+                suggestion = _suggest_category_for_description(item["description"])
+                if suggestion:
+                    item["suggested_category_id"] = suggestion["category_id"]
+                    item["suggested_category_name"] = suggestion["category_name"]
+                    item["suggested_category_icon"] = suggestion.get("category_icon")
+
+                dupes = _check_duplicate_in_db(item["amount"], item["description"], item["date"])
+                if dupes:
+                    item["potential_duplicates"] = dupes
+                    item["is_duplicate"] = True
+                else:
+                    item["potential_duplicates"] = []
+                    item["is_duplicate"] = False
+
+            # Count pages
+            page_count = direct_text.count("--- Page")
+
+            # Store in DB
+            conn = get_connection()
+            try:
+                cursor = conn.execute(
+                    "INSERT INTO ocr_uploads (filename, raw_text, extracted_data, status) VALUES (?, ?, ?, ?)",
+                    (filename, direct_text, json.dumps(extracted), 'processed'),
+                )
+                conn.commit()
+                upload_id = cursor.lastrowid
+            finally:
+                conn.close()
+
+            return {
+                "upload_id": upload_id,
+                "filename": filename,
+                "raw_text": direct_text,
+                "doc_type": "statement",
+                "merchant_name": None,
+                "transactions": extracted,
+                "count": len(extracted),
+                "page_count": page_count,
+                "extraction_method": "direct",
+                "duplicate_count": sum(1 for t in extracted if t.get("is_duplicate")),
+            }
+
+    # Step 2: Fall back to OCR for scanned PDFs
     if not TESSERACT_AVAILABLE:
-        raise RuntimeError("Tesseract OCR is not installed")
+        raise RuntimeError("Tesseract OCR is not installed and PDF has no extractable text")
 
     try:
         from pdf2image import convert_from_bytes
@@ -563,7 +777,6 @@ def process_pdf(filename: str, file_bytes: bytes) -> dict:
     seen_ids = set()
 
     for i, img in enumerate(images):
-        # Save page as temp image and run through existing pipeline
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             img.save(tmp, format="PNG")
             tmp_path = tmp.name
@@ -573,7 +786,6 @@ def process_pdf(filename: str, file_bytes: bytes) -> dict:
             all_raw_text.append(f"--- Page {i + 1} ---\n{raw_text}")
             page_extracted = parse_amounts(raw_text)
             for tx in page_extracted:
-                # Dedup across pages by amount + date + description
                 dedup_key = (tx.get("amount"), tx.get("date"), tx.get("description", "").strip())
                 if dedup_key not in seen_ids:
                     seen_ids.add(dedup_key)
@@ -585,7 +797,6 @@ def process_pdf(filename: str, file_bytes: bytes) -> dict:
     lines = combined_text.strip().split('\n')
     doc_type = _detect_document_type(lines)
 
-    # Store in DB
     conn = get_connection()
     try:
         cursor = conn.execute(
@@ -606,6 +817,7 @@ def process_pdf(filename: str, file_bytes: bytes) -> dict:
         "transactions": all_extracted,
         "count": len(all_extracted),
         "page_count": len(images),
+        "extraction_method": "ocr",
         "duplicate_count": sum(1 for t in all_extracted if t.get("is_duplicate")),
     }
 
